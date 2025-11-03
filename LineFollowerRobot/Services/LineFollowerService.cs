@@ -5,6 +5,11 @@ using RobotProject.Shared.DTOs;
 
 namespace LineFollowerRobot.Services;
 
+/// <summary>
+/// Main service for autonomous line following navigation using PID control
+/// Runs as a background service processing camera frames at 13 FPS target
+/// Integrates camera line detection, motor control, beacon detection, and obstacle avoidance
+/// </summary>
 public class LineFollowerService : BackgroundService
 {
     private readonly ILogger<LineFollowerService> _logger;
@@ -16,32 +21,35 @@ public class LineFollowerService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private bool _obstacleDetected = false;
 
-    // PID control variables - matching Python exactly
+    // PID control variables - matching Python reference implementation exactly
     private double _previousError = 0;
     private double _integral = 0;
-    private readonly double _kp = 0.2; // Exact match to Python
-    private readonly double _ki = 0.0; // Exact match to Python  
-    private readonly double _kd = 0.05; // Exact match to Python
+    private readonly double _kp = 0.2; // Proportional gain - tuned for smooth following
+    private readonly double _ki = 0.0; // Integral gain - disabled to prevent windup
+    private readonly double _kd = 0.05; // Derivative gain - provides damping
 
-    // Movement thresholds - matching Python exactly
-    private readonly int _smallErrorThreshold = 30; // Python: < 30 = go straight
-    private readonly int _mediumErrorThreshold = 80; // Python: < 80 = gentle correction
-    private readonly int _extremeErrorThreshold = 150; // Python: > 150 = full turn
+    // Movement thresholds - controls robot behavior based on line position error
+    private readonly int _smallErrorThreshold = 30; // < 30 pixels = go straight ahead
+    private readonly int _mediumErrorThreshold = 80; // < 80 pixels = gentle turn correction
+    private readonly int _extremeErrorThreshold = 150; // > 150 pixels = full power turn
 
-    private readonly int _frameDelayMs = 1000 / 13;
+    private readonly int _frameDelayMs = 1000 / 13; // Target 13 FPS processing rate
 
-    // Line tracking state - matching Python exactly
+    // Line tracking state - manages line lost scenarios
     private bool _lineDetected = false;
     private int _lineLostCounter = 0;
-    private readonly int _maxLineLostFrames = 20; // Exact match to Python
-    private string _lastDirection = "forward"; // Track last direction
+    private readonly int _maxLineLostFrames = 20; // Allow 20 frames grace before line lost action
+    private string _lastDirection = "forward"; // Tracks last movement direction
 
-    // Statistics and FPS tracking
+    // Statistics and FPS tracking for performance monitoring
     private int _framesProcessed = 0;
     private DateTime _startTime;
     private DateTime _lastFpsReport;
 
-    // Dynamic line color setting
+    /// <summary>
+    /// Dynamic line color for following different colored lines (RGB)
+    /// Server can change this to follow blue, red, or other colored lines
+    /// </summary>
     public byte[]? LineColor { get; set; } = null;
 
     // Beacon detection logging throttle
@@ -49,8 +57,12 @@ public class LineFollowerService : BackgroundService
 
     // Beacon detection grace period (prevents premature detection when starting near beacon)
     private DateTime _navigationStartTime = DateTime.MinValue;
-    private const int BEACON_DETECTION_GRACE_PERIOD_SECONDS = 10;
+    private const int BEACON_DETECTION_GRACE_PERIOD_SECONDS = 10; // Wait 10 seconds before checking beacons
 
+    /// <summary>
+    /// Initializes the line follower service with all required dependencies
+    /// Sets up PID parameters, movement thresholds, and sensor event handlers
+    /// </summary>
     public LineFollowerService(
         ILogger<LineFollowerService> logger,
         IConfiguration config,

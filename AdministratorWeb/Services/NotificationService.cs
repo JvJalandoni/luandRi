@@ -3,21 +3,40 @@ using Microsoft.Extensions.Logging;
 
 namespace AdministratorWeb.Services
 {
+    /// <summary>
+    /// Interface for sending notifications to customers about request status changes
+    /// </summary>
     public interface INotificationService
     {
+        /// <summary>Notifies customer when their request is cancelled</summary>
         Task NotifyCustomerRequestCancelledAsync(LaundryRequest request, string reason);
+        /// <summary>Notifies customer when their request status changes</summary>
         Task NotifyCustomerRequestStatusChangeAsync(LaundryRequest request, string statusMessage);
     }
 
+    /// <summary>
+    /// Service for handling customer notifications via SMS, email, or push notifications
+    /// Currently logs notifications - can be extended to send actual notifications
+    /// </summary>
     public class NotificationService : INotificationService
     {
         private readonly ILogger<NotificationService> _logger;
 
+        /// <summary>
+        /// Initializes the notification service
+        /// </summary>
+        /// <param name="logger">Logger for tracking notification events</param>
         public NotificationService(ILogger<NotificationService> logger)
         {
             _logger = logger;
         }
 
+        /// <summary>
+        /// Notifies customer that their laundry request has been cancelled
+        /// Logs the notification - can be extended to send SMS/email/push notification
+        /// </summary>
+        /// <param name="request">The cancelled laundry request</param>
+        /// <param name="reason">Reason for cancellation</param>
         public async Task NotifyCustomerRequestCancelledAsync(LaundryRequest request, string reason)
         {
             try
@@ -54,6 +73,13 @@ namespace AdministratorWeb.Services
             }
         }
 
+        /// <summary>
+        /// Notifies customer about a status change in their laundry request
+        /// Only sends notifications for critical status changes (e.g., robot arrived, payment due, completed)
+        /// Logs critical status changes for tracking - mobile app polls for status and displays local notifications
+        /// </summary>
+        /// <param name="request">The laundry request with updated status</param>
+        /// <param name="statusMessage">Human-readable status message</param>
         public async Task NotifyCustomerRequestStatusChangeAsync(LaundryRequest request, string statusMessage)
         {
             try

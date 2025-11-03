@@ -19,6 +19,10 @@ import { laundryService } from '../services/laundryService';
 import { notificationService } from '../services/notificationService';
 import { formatRelativeTime } from '../utils/dateUtils';
 
+/**
+ * Represents an active laundry request with current status and details
+ * Used to track robot progress from pickup through payment and delivery
+ */
 interface ActiveRequest {
         id: number;
         status: string;
@@ -34,6 +38,19 @@ interface ActiveRequest {
         instructions?: string;
 }
 
+/**
+ * Active Request Screen - Shows real-time status of customer's current laundry request
+ * Features:
+ * - Live status updates (robot en route, arrived at room, weighing, payment pending, etc.)
+ * - Robot weight sensor readings displayed in real-time
+ * - Confirm laundry loaded button with weight and cost preview
+ * - Payment confirmation flow
+ * - Delivery option selection after washing
+ * - Auto-refresh every 5 seconds + pull-to-refresh
+ * - Push notification support for status changes
+ *
+ * @returns React component displaying active request status and actions
+ */
 export default function ActiveRequestScreen() {
         const { user } = useAuth();
         const router = useRouter();
@@ -57,6 +74,11 @@ export default function ActiveRequestScreen() {
         // Track previous status for change detection
         const previousStatusRef = useRef<string | null>(null);
 
+        /**
+         * Loads the customer's active laundry request from the server
+         * Auto-loads robot weight data if robot is at customer's room
+         * Sets loading state and handles errors with alert display
+         */
         const loadActiveRequest = async () => {
                 try {
                         setIsLoading(true);
@@ -75,6 +97,12 @@ export default function ActiveRequestScreen() {
                 }
         };
 
+        /**
+         * Loads real-time weight data from robot's HX711 sensor
+         * Fetches detectedWeightKg from request details endpoint
+         * Updates robotWeight state for display in UI
+         * @param robotName - Name of robot (e.g., "RobotA")
+         */
         const loadRobotWeight = async (robotName: string) => {
                 try {
                         // Get robot weight from backend via request details
@@ -90,6 +118,12 @@ export default function ActiveRequestScreen() {
                 }
         };
 
+        /**
+         * Handles customer confirmation that laundry has been loaded onto robot
+         * Validates weight is detected, fetches pricing, calculates cost
+         * Shows confirmation dialog with weight and cost preview
+         * Sends confirmation to server which triggers robot return to base
+         */
         const handleConfirmLaundryLoaded = async () => {
                 if (!activeRequest?.weight) {
                         showAlert('Error', 'No weight detected. Please try again.');

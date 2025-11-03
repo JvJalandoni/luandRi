@@ -6,13 +6,21 @@ using AdministratorWeb.Models;
 using AdministratorWeb.Models.DTOs;
 using AdministratorWeb.Services;
 
+/// <summary>
+/// Request data for confirming laundry has been loaded onto robot
+/// </summary>
 public class ConfirmLoadedDto
 {
+    /// <summary>Weight of laundry in kilograms (optional, robot may auto-detect)</summary>
     public double? Weight { get; set; }
 }
 
+/// <summary>
+/// Request data for selecting delivery option after washing is complete
+/// </summary>
 public class SelectDeliveryOptionDto
 {
+    /// <summary>Delivery type: "Delivery" (robot delivers) or "Pickup" (customer picks up)</summary>
     public string DeliveryType { get; set; } = string.Empty;
 }
 
@@ -31,6 +39,12 @@ namespace AdministratorWeb.Controllers.Api
         private readonly IRobotManagementService _robotService;
         private readonly ILogger<RequestsController> _logger;
 
+        /// <summary>
+        /// Initializes the requests controller with required services
+        /// </summary>
+        /// <param name="context">Database context for accessing requests and settings</param>
+        /// <param name="robotService">Service for managing robot fleet</param>
+        /// <param name="logger">Logger for tracking request operations</param>
         public RequestsController(ApplicationDbContext context, IRobotManagementService robotService, ILogger<RequestsController> logger)
         {
             _context = context;
@@ -38,6 +52,12 @@ namespace AdministratorWeb.Controllers.Api
             _logger = logger;
         }
 
+        /// <summary>
+        /// Creates a new laundry pickup request from the mobile app
+        /// Auto-assigns an available robot and optionally auto-accepts if enabled in settings
+        /// Implements queuing logic to handle multiple simultaneous requests
+        /// </summary>
+        /// <returns>Request details including ID, status, assigned robot, and confirmation message</returns>
         [HttpPost]
         public async Task<IActionResult> CreateRequest()
         {
@@ -168,6 +188,11 @@ namespace AdministratorWeb.Controllers.Api
             }
         }
 
+        /// <summary>
+        /// Gets all laundry requests for a specific customer
+        /// </summary>
+        /// <param name="customerId">ID of the customer</param>
+        /// <returns>List of all requests for the customer, ordered by request date (newest first)</returns>
         [HttpGet("{customerId}")]
         public async Task<IActionResult> GetCustomerRequests(string customerId)
         {
@@ -192,6 +217,11 @@ namespace AdministratorWeb.Controllers.Api
             return Ok(requests);
         }
 
+        /// <summary>
+        /// Gets the current status and details of a specific laundry request
+        /// </summary>
+        /// <param name="requestId">ID of the request</param>
+        /// <returns>Complete request information including status, timestamps, weight, cost, and robot assignment</returns>
         [HttpGet("status/{requestId}")]
         public async Task<IActionResult> GetRequestStatus(int requestId)
         {
@@ -232,6 +262,10 @@ namespace AdministratorWeb.Controllers.Api
             });
         }
 
+        /// <summary>
+        /// Gets all laundry requests for the authenticated customer (from JWT token)
+        /// </summary>
+        /// <returns>List of all requests for the logged-in customer with complete details</returns>
         [HttpGet("my-requests")]
         public async Task<IActionResult> GetMyRequests()
         {
@@ -278,6 +312,14 @@ namespace AdministratorWeb.Controllers.Api
             return Ok(requests);
         }
 
+        /// <summary>
+        /// Customer confirms that laundry has been loaded onto the robot
+        /// Updates request status to LaundryLoaded and calculates cost based on weight
+        /// Robot will then return to base station
+        /// </summary>
+        /// <param name="requestId">ID of the request to confirm</param>
+        /// <param name="dto">Optional weight data (if not auto-detected by robot)</param>
+        /// <returns>Confirmation with updated status, weight, and calculated total cost</returns>
         [HttpPost("{requestId}/confirm-loaded")]
         public async Task<IActionResult> ConfirmLaundryLoaded(int requestId, [FromBody] ConfirmLoadedDto dto = null)
         {
@@ -330,6 +372,13 @@ namespace AdministratorWeb.Controllers.Api
             });
         }
 
+        /// <summary>
+        /// Customer confirms that clean laundry has been unloaded from the robot
+        /// Used during delivery flow when robot delivers clean laundry to customer room
+        /// Robot will then return to base station
+        /// </summary>
+        /// <param name="requestId">ID of the request to confirm</param>
+        /// <returns>Confirmation that robot is returning to base</returns>
         [HttpPost("{requestId}/confirm-unloaded")]
         public async Task<IActionResult> ConfirmLaundryUnloaded(int requestId)
         {
@@ -366,6 +415,14 @@ namespace AdministratorWeb.Controllers.Api
             });
         }
 
+        /// <summary>
+        /// Customer selects delivery option after washing is complete
+        /// Delivery: Robot will deliver clean laundry to customer room
+        /// Pickup: Customer will pick up clean laundry from laundry area
+        /// </summary>
+        /// <param name="requestId">ID of the request</param>
+        /// <param name="dto">Delivery option selection</param>
+        /// <returns>Confirmation of selected delivery method and next steps</returns>
         [HttpPost("{requestId}/select-delivery-option")]
         public async Task<IActionResult> SelectDeliveryOption(int requestId, [FromBody] SelectDeliveryOptionDto dto)
         {
@@ -429,6 +486,11 @@ namespace AdministratorWeb.Controllers.Api
             }
         }
 
+        /// <summary>
+        /// Gets the customer's currently active laundry request (if any)
+        /// Active means not completed, cancelled, or declined
+        /// </summary>
+        /// <returns>Active request details, or null if no active request exists</returns>
         [HttpGet("active")]
         public async Task<IActionResult> GetActiveRequest()
         {
@@ -482,9 +544,11 @@ namespace AdministratorWeb.Controllers.Api
         }
 
         /// <summary>
-        /// Auto-assign a robot to a request using smart assignment logic
-        /// Priority: 1) Available robots 2) Least recently assigned busy robot
+        /// Auto-assigns a robot to a request using smart assignment logic
+        /// Priority: 1) Available robots first 2) Least recently assigned busy robot as fallback
+        /// May reassign robots from pending requests to accommodate new requests
         /// </summary>
+        /// <returns>Assigned robot, or null if no robots are available</returns>
         private async Task<ConnectedRobot?> AutoAssignRobotAsync()
         {
             try
@@ -559,6 +623,10 @@ namespace AdministratorWeb.Controllers.Api
             }
         }
 
+        /// <summary>
+        /// Gets current laundry pricing from system settings
+        /// </summary>
+        /// <returns>Price per kilogram and minimum charge</returns>
         [HttpGet("pricing")]
         public async Task<IActionResult> GetPricing()
         {
@@ -580,7 +648,8 @@ namespace AdministratorWeb.Controllers.Api
         }
 
         /// <summary>
-        /// Auto-accept the next pending request in queue when robot becomes available
+        /// Auto-processes the next pending request in queue when a robot becomes available
+        /// Automatically assigns robot and starts line following if auto-accept is enabled
         /// Called when robot returns to base after completing a delivery
         /// </summary>
         public async Task ProcessNextPendingRequestAsync()
@@ -660,9 +729,11 @@ namespace AdministratorWeb.Controllers.Api
         }
 
         /// <summary>
-        /// Get timer settings for room arrival timeout
-        /// Used by both web admin and mobile app to dynamically fetch timeout duration
+        /// Gets timeout settings for robot room arrival
+        /// Used by both web admin and mobile app to display countdown timers
+        /// Allows timeout duration to be dynamically configured in settings
         /// </summary>
+        /// <returns>Room arrival timeout in minutes and seconds</returns>
         [HttpGet("timer-settings")]
         [AllowAnonymous]
         public async Task<IActionResult> GetTimerSettings()
@@ -686,9 +757,11 @@ namespace AdministratorWeb.Controllers.Api
         }
 
         /// <summary>
-        /// Get available robots count for mobile app
-        /// Shows how many robots are available for new requests
+        /// Gets robot fleet availability status for mobile app dashboard
+        /// Shows how many robots are available, busy, or offline
+        /// Helps users know if they can make a request immediately
         /// </summary>
+        /// <returns>Robot fleet statistics including available, busy, and offline counts</returns>
         [HttpGet("available-robots")]
         [AllowAnonymous]
         public async Task<IActionResult> GetAvailableRobots()

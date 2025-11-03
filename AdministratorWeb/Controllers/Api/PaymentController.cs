@@ -18,11 +18,22 @@ namespace AdministratorWeb.Controllers.Api
     {
         private readonly ApplicationDbContext _context;
 
+        /// <summary>
+        /// Initializes the payment controller with database context
+        /// </summary>
+        /// <param name="context">Database context for accessing payment and request data</param>
         public PaymentController(ApplicationDbContext context)
         {
             _context = context;
         }
 
+        /// <summary>
+        /// Processes payment for a laundry request from the mobile app
+        /// Creates a payment record, marks request as paid, and auto-generates a receipt
+        /// </summary>
+        /// <param name="requestId">ID of the laundry request to pay for</param>
+        /// <param name="paymentRequest">Payment details (method, reference, notes)</param>
+        /// <returns>Payment confirmation with receipt number and transaction ID</returns>
         [HttpPost("{requestId}/pay")]
         public async Task<IActionResult> ProcessPayment(int requestId, [FromBody] PaymentRequest paymentRequest)
         {
@@ -116,6 +127,11 @@ namespace AdministratorWeb.Controllers.Api
             });
         }
 
+        /// <summary>
+        /// Gets the payment status and details for a laundry request
+        /// </summary>
+        /// <param name="requestId">ID of the laundry request</param>
+        /// <returns>Payment information including amount, method, status, and transaction details</returns>
         [HttpGet("{requestId}/payment-status")]
         public async Task<IActionResult> GetPaymentStatus(int requestId)
         {
@@ -163,6 +179,10 @@ namespace AdministratorWeb.Controllers.Api
             });
         }
 
+        /// <summary>
+        /// Gets the payment history for the authenticated customer
+        /// </summary>
+        /// <returns>List of all payments made by the customer, including associated request details</returns>
         [HttpGet("history")]
         public async Task<IActionResult> GetPaymentHistory()
         {
@@ -199,6 +219,11 @@ namespace AdministratorWeb.Controllers.Api
             return Ok(payments);
         }
 
+        /// <summary>
+        /// Generates a unique transaction ID for payment tracking
+        /// Format: TXN_YYYYMMDD_XXXXXXXX (e.g., TXN_20250103_A1B2C3D4)
+        /// </summary>
+        /// <returns>Unique transaction identifier string</returns>
         private string GenerateTransactionId()
         {
             return $"TXN_{DateTime.UtcNow:yyyyMMdd}_{Guid.NewGuid().ToString("N")[..8].ToUpper()}";
@@ -206,6 +231,12 @@ namespace AdministratorWeb.Controllers.Api
 
         // ==================== RECEIPT GENERATION METHODS ====================
 
+        /// <summary>
+        /// Generates a digital receipt record for a payment
+        /// Auto-generates a sequential receipt number and saves to database
+        /// </summary>
+        /// <param name="paymentId">ID of the payment to generate receipt for</param>
+        /// <returns>Generated receipt record with unique receipt number</returns>
         private async Task<Receipt> GenerateReceiptAsync(int paymentId)
         {
             Console.WriteLine($"[RECEIPT DEBUG] GenerateReceiptAsync called for payment ID: {paymentId}");
@@ -252,6 +283,11 @@ namespace AdministratorWeb.Controllers.Api
             return receipt;
         }
 
+        /// <summary>
+        /// Generates a sequential receipt number for the current year
+        /// Format: RCP-YYYY-NNNNNN (e.g., RCP-2025-000001)
+        /// </summary>
+        /// <returns>Unique receipt number string</returns>
         private async Task<string> GenerateReceiptNumberAsync()
         {
             var year = DateTime.UtcNow.Year;
@@ -275,6 +311,12 @@ namespace AdministratorWeb.Controllers.Api
             return $"{prefix}-{sequence:D6}"; // RCP-2025-000001
         }
 
+        /// <summary>
+        /// Debug endpoint to check payment and receipt status for a request
+        /// Useful for troubleshooting payment/receipt generation issues
+        /// </summary>
+        /// <param name="requestId">ID of the laundry request to debug</param>
+        /// <returns>Diagnostic information about request, payment, and receipt status</returns>
         [HttpGet("debug/{requestId}")]
         public async Task<IActionResult> DebugPaymentReceipt(int requestId)
         {
@@ -311,6 +353,12 @@ namespace AdministratorWeb.Controllers.Api
             });
         }
 
+        /// <summary>
+        /// Gets the receipt details for a laundry request
+        /// Returns receipt data from payment record, generates receipt number if needed
+        /// </summary>
+        /// <param name="requestId">ID of the laundry request</param>
+        /// <returns>Complete receipt information including payment details, weight, and pricing</returns>
         [HttpGet("receipt/{requestId}")]
         public async Task<IActionResult> GetReceiptByRequest(int requestId)
         {
@@ -399,10 +447,16 @@ namespace AdministratorWeb.Controllers.Api
 
     }
 
+    /// <summary>
+    /// Payment request data from mobile app
+    /// </summary>
     public class PaymentRequest
     {
+        /// <summary>Payment method used (CreditCard, Cash, GCash, etc.)</summary>
         public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.CreditCard;
+        /// <summary>Payment reference number (e.g., GCash reference number)</summary>
         public string? PaymentReference { get; set; }
+        /// <summary>Additional payment notes</summary>
         public string? Notes { get; set; }
     }
 }

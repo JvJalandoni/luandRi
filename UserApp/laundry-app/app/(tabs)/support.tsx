@@ -17,6 +17,20 @@ import * as ImagePicker from 'expo-image-picker';
 import { Message, getMessages, sendMessage, markMessagesAsRead, getUnreadCount } from '../../services/messageService';
 import { Admin, getAdmins } from '../../services/userService';
 
+/**
+ * Support Screen - Customer service messaging with admin staff
+ * Features:
+ * - Two-view interface: admin list and chat view
+ * - Select admin from list to start conversation
+ * - Real-time messaging with text and image support
+ * - Auto-poll for new messages every 5 seconds
+ * - Unread message count badges
+ * - Image attachment via camera or gallery
+ * - Mark messages as read when viewing chat
+ * - Auto-scroll to latest message
+ *
+ * @returns React component for customer support chat interface
+ */
 export default function SupportScreen() {
   const [view, setView] = useState<'adminList' | 'chat'>('adminList');
   const [admins, setAdmins] = useState<Admin[]>([]);

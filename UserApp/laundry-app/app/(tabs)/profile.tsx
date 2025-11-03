@@ -16,6 +16,18 @@ import { useThemeColor } from '../../hooks/useThemeColor';
 import { userService } from '../../services/userService';
 import { notificationService } from '../../services/notificationService';
 
+/**
+ * Profile Screen - User account management and settings
+ * Features:
+ * - View and edit user profile (name, email, phone)
+ * - Display assigned room and beacon information
+ * - Logout functionality
+ * - Auto-refresh when screen gains focus
+ * - Save profile changes to server
+ * - Pull user data from auth context as fallback
+ *
+ * @returns React component for user profile management
+ */
 export default function ProfileScreen() {
         const router = useRouter();
         const { user, logout, refreshProfile } = useAuth();
@@ -47,6 +59,11 @@ export default function ProfileScreen() {
                 }, []) // Remove refreshProfile from dependencies to prevent infinite loop
         );
 
+        /**
+         * Loads user profile data from server
+         * Falls back to auth context user data if profile fetch fails
+         * Populates form fields with current user information
+         */
         const loadProfile = async () => {
                 try {
                         const profile = await userService.getProfile();
