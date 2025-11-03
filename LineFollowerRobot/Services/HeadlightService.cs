@@ -24,8 +24,16 @@ public class HeadlightService : BackgroundService, IDisposable
     private bool _lastLineFollowingState = false;
     private readonly object _headlightLock = new();
 
+    /// <summary>
+    /// Initializes the headlight service and optionally configures GPIO
+    /// Checks Robot:IsSimulation config to determine if running on real hardware
+    /// Automatically initializes GPIO pin 14 for LED control if not in simulation mode
+    /// </summary>
+    /// <param name="logger">Logger for diagnostic output</param>
+    /// <param name="config">Configuration containing simulation mode flag</param>
+    /// <param name="motorService">Motor service to monitor line following status</param>
     public HeadlightService(
-        ILogger<HeadlightService> logger, 
+        ILogger<HeadlightService> logger,
         IConfiguration config,
         LineFollowerMotorService motorService)
     {
@@ -35,7 +43,7 @@ public class HeadlightService : BackgroundService, IDisposable
 
         // Check if running on actual hardware (not in development/simulation)
         var isSimulation = _config.GetValue<bool>("Robot:IsSimulation", false);
-        
+
         if (!isSimulation)
         {
             try
@@ -53,6 +61,11 @@ public class HeadlightService : BackgroundService, IDisposable
         }
     }
 
+    /// <summary>
+    /// Initializes GPIO pin 14 for LED array headlight control
+    /// Opens pin as output and sets initial state to LOW (headlights off)
+    /// Marks service as initialized if successful
+    /// </summary>
     private void InitializeGpio()
     {
         try
@@ -60,7 +73,7 @@ public class HeadlightService : BackgroundService, IDisposable
             _gpio = new GpioController();
             _gpio.OpenPin(_headlightPin, PinMode.Output);
             _gpio.Write(_headlightPin, PinValue.Low); // Start with headlights off
-            
+
             _isInitialized = true;
             _logger.LogInformation("HeadlightService initialized - GPIO {Pin} ready for LED array control", _headlightPin);
         }
@@ -71,6 +84,13 @@ public class HeadlightService : BackgroundService, IDisposable
         }
     }
 
+    /// <summary>
+    /// Background task that monitors line following status every 200ms
+    /// Automatically turns headlights ON when robot starts navigating
+    /// Automatically turns headlights OFF when robot stops
+    /// Waits 3 seconds on startup for other services to initialize
+    /// Ensures headlights are turned off when service stops
+    /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("HeadlightService started - monitoring line following status with 200ms periodic timer");

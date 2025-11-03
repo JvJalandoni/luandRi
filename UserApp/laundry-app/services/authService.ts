@@ -21,11 +21,23 @@ export interface User {
   roomDescription?: string;
 }
 
+/**
+ * Service for handling user authentication
+ * Manages JWT tokens, login/logout, and user session state
+ * All tokens are stored securely in AsyncStorage
+ */
 export const authService = {
+  /**
+   * Authenticates a user with username and password
+   * Stores JWT token and user data in AsyncStorage on success
+   * @param data - Login credentials (username and password)
+   * @returns Promise with auth response containing token and user info
+   * @throws Error if authentication fails or token storage fails
+   */
   async login(data: LoginRequest): Promise<AuthResponse> {
     const response = await apiPost('/auth/login', data);
     const authData = response.data;
-    
+
     // Store token and user data securely
     try {
       await AsyncStorage.setItem('jwt_token', authData.token);
@@ -37,10 +49,14 @@ export const authService = {
       console.error('Failed to store auth data in AsyncStorage:', error);
       throw new Error('Authentication data could not be stored securely');
     }
-    
+
     return authData;
   },
 
+  /**
+   * Logs out the current user
+   * Clears JWT token and user data from AsyncStorage
+   */
   async logout(): Promise<void> {
     try {
       await AsyncStorage.removeItem('jwt_token');
@@ -50,6 +66,10 @@ export const authService = {
     }
   },
 
+  /**
+   * Gets the currently logged in user's data from AsyncStorage
+   * @returns Promise with user data, or null if not logged in
+   */
   async getCurrentUser(): Promise<User | null> {
     try {
       const userData = await AsyncStorage.getItem('user_data');
@@ -60,6 +80,12 @@ export const authService = {
     }
   },
 
+  /**
+   * Checks if user is currently logged in by validating JWT token with backend
+   * Token is validated against server to ensure it's still valid
+   * Returns true for network errors to support offline usage
+   * @returns Promise with true if logged in with valid token, false otherwise
+   */
   async isLoggedIn(): Promise<boolean> {
     try {
       const token = await AsyncStorage.getItem('jwt_token');
@@ -81,6 +107,10 @@ export const authService = {
     }
   },
 
+  /**
+   * Gets the current JWT token from AsyncStorage
+   * @returns Promise with JWT token string, or null if not logged in
+   */
   async getToken(): Promise<string | null> {
     try {
       return await AsyncStorage.getItem('jwt_token');

@@ -4,19 +4,36 @@ using Microsoft.Extensions.Logging;
 
 namespace LineFollowerRobot.Services;
 
+/// <summary>
+/// Represents the current state of the robot's motors
+/// </summary>
 public enum MotorState
 {
+    /// <summary>All motors stopped</summary>
     Stopped,
+    /// <summary>All motors moving forward</summary>
     Forward,
+    /// <summary>All motors moving backward</summary>
     Backward,
+    /// <summary>Rotating left in place (left wheels backward, right forward)</summary>
     TurnLeft,
+    /// <summary>Rotating right in place (left wheels forward, right backward)</summary>
     TurnRight,
+    /// <summary>Veering left while moving forward</summary>
     LeftForward,
+    /// <summary>Veering right while moving forward</summary>
     RightForward,
+    /// <summary>Slow search pattern turning left</summary>
     SearchLeft,
+    /// <summary>Slow search pattern turning right</summary>
     SearchRight
 }
 
+/// <summary>
+/// Service for controlling 4-wheel robot motors via GPIO pins
+/// Controls motor movements for line following navigation
+/// Pin mappings match Python reference implementation exactly
+/// </summary>
 public class LineFollowerMotorService : IDisposable
 {
     private readonly ILogger<LineFollowerMotorService> _logger;
@@ -28,7 +45,7 @@ public class LineFollowerMotorService : IDisposable
     private readonly int _frontLeftPin1 = 5; // FL_IN1 = 5 (Python)
     private readonly int _frontLeftPin2 = 6; // FL_IN2 = 6 (Python)
     private readonly int _frontRightPin1 = 19; // FR_IN1 = 19 (Python)
-    private readonly int _frontRightPin2 = 26; // FR_IN2 = 26 (Python)  
+    private readonly int _frontRightPin2 = 26; // FR_IN2 = 26 (Python)
     private readonly int _backLeftPin1 = 16; // BL_IN1 = 16 (Python)
     private readonly int _backLeftPin2 = 20; // BL_IN2 = 20 (Python)
     private readonly int _backRightPin1 = 13; // BR_IN1 = 13 (Python)
@@ -40,10 +57,21 @@ public class LineFollowerMotorService : IDisposable
 
     // Line following state - controlled by server commands
     private volatile bool _isLineFollowingActive = false;
+
+    /// <summary>
+    /// Indicates whether line following mode is currently active
+    /// Controlled by server commands via data exchange
+    /// </summary>
     public bool IsLineFollowingActive => _isLineFollowingActive;
 
+    /// <summary>
+    /// Gets the current motor state
+    /// </summary>
     public MotorState CurrentState => _currentMotorState;
 
+    /// <summary>
+    /// Initializes the motor service with logger and configuration
+    /// </summary>
     public LineFollowerMotorService(ILogger<LineFollowerMotorService> logger, IConfiguration config)
     {
         _logger = logger;
@@ -95,6 +123,12 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Sets a GPIO pin to HIGH or LOW value
+    /// Thread-safe helper method for motor control
+    /// </summary>
+    /// <param name="pin">GPIO pin number</param>
+    /// <param name="value">True for HIGH, false for LOW</param>
     private void SetPin(int pin, bool value)
     {
         try
@@ -108,6 +142,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Commands all four wheels to move forward
+    /// Sets all motor pins to forward direction matching Python implementation
+    /// Thread-safe with motor lock
+    /// </summary>
     public void MoveForward()
     {
         lock (_motorLock)
@@ -141,6 +180,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Commands all four wheels to move backward
+    /// Sets all motor pins to reverse direction matching Python implementation
+    /// Thread-safe with motor lock
+    /// </summary>
     public void MoveBackward()
     {
         lock (_motorLock)
@@ -174,6 +218,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Rotates robot left in place
+    /// Left wheels go backward, right wheels go forward for point turn
+    /// Thread-safe with motor lock
+    /// </summary>
     public void TurnLeft()
     {
         lock (_motorLock)
@@ -207,6 +256,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Rotates robot right in place
+    /// Left wheels go forward, right wheels go backward for point turn
+    /// Thread-safe with motor lock
+    /// </summary>
     public void TurnRight()
     {
         lock (_motorLock)
@@ -240,6 +294,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Veers the robot left while moving forward
+    /// Left motors off, right motors on - creates gentle left curve
+    /// Used for minor course corrections during line following
+    /// </summary>
     public void LeftForward()
     {
         lock (_motorLock)
@@ -265,6 +324,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Veers the robot right while moving forward
+    /// Right motors off, left motors on - creates gentle right curve
+    /// Used for minor course corrections during line following
+    /// </summary>
     public void RightForward()
     {
         lock (_motorLock)
@@ -290,6 +354,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Executes slow left turn search pattern
+    /// Left motors forward, right motors off - creates slow left pivot
+    /// Used when line is lost to search for it again
+    /// </summary>
     public void SearchLeft()
     {
         lock (_motorLock)
@@ -317,6 +386,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Executes slow right turn search pattern
+    /// Right motors forward, left motors off - creates slow right pivot
+    /// Used when line is lost to search for it again
+    /// </summary>
     public void SearchRight()
     {
         lock (_motorLock)
@@ -328,7 +402,7 @@ public class LineFollowerMotorService : IDisposable
             // Python search pattern: Stop left motors, power right motors forward
             // This creates a slow right turn for searching
 
-            // Stop left motors  
+            // Stop left motors
             SetPin(_frontLeftPin1, false); // FL_IN1 = 0
             SetPin(_frontLeftPin2, false); // FL_IN2 = 0
             SetPin(_backLeftPin1, false); // BL_IN1 = 0
@@ -344,6 +418,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Stops all motors immediately
+    /// Sets all motor pins to LOW and verifies stop after brief delay
+    /// Thread-safe with motor lock
+    /// </summary>
     public void Stop()
     {
         lock (_motorLock)
@@ -370,6 +449,11 @@ public class LineFollowerMotorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Verifies all motor pins are LOW after stop command
+    /// Reads GPIO pins and retries stop if any pins are still HIGH
+    /// Safety feature to ensure motors actually stopped
+    /// </summary>
     private void VerifyMotorsStopped()
     {
         try
@@ -413,6 +497,11 @@ public class LineFollowerMotorService : IDisposable
     }
 
     // Navigation control methods for robot commands
+
+    /// <summary>
+    /// Starts autonomous navigation with line following
+    /// Begins forward movement and activates line following mode
+    /// </summary>
     public async Task StartNavigationAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("🚀 Starting navigation (line following mode)");
@@ -423,6 +512,11 @@ public class LineFollowerMotorService : IDisposable
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Enables line following mode
+    /// Sets the flag that allows LineFollowerService to control motors
+    /// Called by server command via data exchange
+    /// </summary>
     public async Task StartLineFollowingAsync(CancellationToken cancellationToken = default)
     {
         // _logger.LogInformation("📍 Starting line following mode");
@@ -432,6 +526,11 @@ public class LineFollowerMotorService : IDisposable
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Disables line following mode and stops all motors
+    /// Clears the flag that allows LineFollowerService to control motors
+    /// Called by server command via data exchange
+    /// </summary>
     public async Task StopLineFollowingAsync()
     {
         // _logger.LogInformation("🛑 Stopping line following mode");
@@ -442,6 +541,10 @@ public class LineFollowerMotorService : IDisposable
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Stops robot and holds current position
+    /// Used when robot needs to wait without moving
+    /// </summary>
     public async Task HoldPositionAsync()
     {
         //  _logger.LogInformation("🔒 Holding current position");
@@ -449,6 +552,10 @@ public class LineFollowerMotorService : IDisposable
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Emergency stop - immediately halts all motors
+    /// Critical safety feature for obstacle avoidance or manual override
+    /// </summary>
     public async Task EmergencyStopAsync()
     {
         _logger.LogCritical("🚨 EMERGENCY STOP - Immediate halt of all motors");
@@ -471,6 +578,11 @@ public class LineFollowerMotorService : IDisposable
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Executes a 180-degree turn in place
+    /// Right wheels forward, left wheels backward for 3 seconds
+    /// Used to reverse direction when commanded by server
+    /// </summary>
     public async Task TurnAroundAsync()
     {
         _logger.LogInformation("🔄 Turning 180 degrees - Right wheels forward, Left wheels backward for 3 seconds");
@@ -499,6 +611,11 @@ public class LineFollowerMotorService : IDisposable
         _logger.LogInformation("✅ 180-degree turn completed");
     }
 
+    /// <summary>
+    /// Disposes of GPIO resources and stops all motors
+    /// Ensures motors are stopped before releasing GPIO controller
+    /// Called when service is shut down or application terminates
+    /// </summary>
     public void Dispose()
     {
         try

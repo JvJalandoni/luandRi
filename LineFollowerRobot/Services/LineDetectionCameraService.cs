@@ -10,19 +10,47 @@ using System.Numerics;
 
 namespace LineFollowerRobot.Services;
 
+/// <summary>
+/// Result of line detection operation containing position, error, and detection metadata
+/// Used by PID controller to calculate steering corrections
+/// </summary>
 public class LineDetectionResult
 {
+    /// <summary>Whether a line was detected in the frame (or via memory)</summary>
     public bool LineDetected { get; set; }
+
+    /// <summary>Horizontal position of detected line in pixels (null if not detected)</summary>
     public int? LinePosition { get; set; }
+
+    /// <summary>Width of the camera frame in pixels (typically 320 or 640)</summary>
     public int FrameWidth { get; set; }
+
+    /// <summary>Center point of the frame (FrameWidth / 2)</summary>
     public int FrameCenter { get; set; }
+
+    /// <summary>Distance in pixels from frame center to line position (positive = line is right of center)</summary>
     public int Error { get; set; }
+
+    /// <summary>When this detection result was generated</summary>
     public DateTime Timestamp { get; set; }
+
+    /// <summary>How the line was detected: "Direct detection", "Memory", or "None"</summary>
     public string DetectionMethod { get; set; } = "";
+
+    /// <summary>True if using remembered position from previous frame (within 3s timeout)</summary>
     public bool UsingMemory { get; set; }
+
+    /// <summary>Seconds elapsed since last direct line detection</summary>
     public double TimeSinceLastLine { get; set; }
 }
 
+/// <summary>
+/// Service for detecting lines in camera frames using image processing algorithms
+/// Reads frames from CameraStreamService and processes them to find line position
+/// Uses dual-method detection: binary thresholding + adaptive thresholding combined
+/// Supports both black line detection and dynamic color following
+/// Implements 3-second line memory to maintain tracking through brief interruptions
+/// </summary>
 public class LineDetectionCameraService : IDisposable
 {
     private readonly ILogger<LineDetectionCameraService> _logger;
@@ -52,6 +80,13 @@ public class LineDetectionCameraService : IDisposable
     private DateTime _cachedJpegTime = DateTime.MinValue;
     private readonly object _jpegCacheLock = new object();
 
+    /// <summary>
+    /// Initializes the line detection service with configurable parameters
+    /// Loads detection thresholds from appsettings.json or uses default values
+    /// </summary>
+    /// <param name="logger">Logger for diagnostic output</param>
+    /// <param name="config">Configuration containing detection parameters</param>
+    /// <param name="cameraStreamService">Camera stream service providing raw frames</param>
     public LineDetectionCameraService(
         ILogger<LineDetectionCameraService> logger,
         IConfiguration config,
@@ -79,30 +114,43 @@ public class LineDetectionCameraService : IDisposable
             _minContourArea, _minValidContourArea, _minAspectRatio, _lineMemoryTimeout);
     }
 
+    /// <summary>
+    /// Waits for camera stream to become active before allowing line detection
+    /// Polls camera stream status every second for up to 15 seconds
+    /// Throws exception if camera fails to activate within timeout period
+    /// </summary>
     public async Task InitializeAsync()
     {
         // Wait for camera stream to be active
         var maxWaitTime = TimeSpan.FromSeconds(15);
         var startTime = DateTime.UtcNow;
-        
+
         while (!_cameraStreamService.IsActive() && (DateTime.UtcNow - startTime) < maxWaitTime)
         {
             _logger.LogInformation("⏳ Waiting for camera stream to become active...");
             await Task.Delay(1000);
         }
-        
+
         if (!_cameraStreamService.IsActive())
         {
             throw new InvalidOperationException("Camera stream is not active after waiting");
         }
-        
+
         _logger.LogInformation("✅ Line Detection Camera Service ready (connected to camera stream)");
     }
 
+    /// <summary>
+    /// Detects the line position in the current camera frame
+    /// Uses image processing algorithms (binary + adaptive thresholding) to find line
+    /// Falls back to 3-second line memory if current frame has no line detected
+    /// Supports optional dynamic color following by providing RGB color array
+    /// </summary>
+    /// <param name="lineColor">Optional RGB color array [R,G,B] for dynamic color following. If null, detects black lines.</param>
+    /// <returns>LineDetectionResult containing position, error, and detection metadata</returns>
     public LineDetectionResult DetectLine(byte[]? lineColor = null)
     {
         using var frame = _cameraStreamService.GetCurrentFrame();
-        
+
         if (frame == null)
         {
             _logger.LogWarning("⚠️ No frame available from camera stream");
@@ -182,6 +230,14 @@ public class LineDetectionCameraService : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Processes a camera frame to detect line position using image processing algorithms
+    /// Extracts ROI (bottom 70% of frame), applies thresholding, and detects line contours
+    /// Uses dual detection methods: contour-based (primary) and column-sum (fallback)
+    /// </summary>
+    /// <param name="frame">RGB24 camera frame to process</param>
+    /// <param name="lineColor">Optional RGB color to follow. If null, detects black lines.</param>
+    /// <returns>Horizontal pixel position of detected line, or null if no line found</returns>
     private int? ProcessFrame(Image<Rgb24> frame, byte[]? lineColor = null)
     {
         var processFramePerf = Stopwatch.StartNew();
@@ -279,13 +335,20 @@ public class LineDetectionCameraService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Attempts to detect line position using contour-based method (primary detection)
+    /// Finds connected white regions (line pixels) and selects largest valid contour
+    /// Validates contours based on minimum area (100px) and aspect ratio (width/height >= 2.0)
+    /// </summary>
+    /// <param name="processedFrame">Binary processed frame (L8 grayscale)</param>
+    /// <returns>Center X position of largest valid contour, or null if no valid contour found</returns>
     private int? TryContourBasedDetection(Image<L8> processedFrame)
     {
         try
         {
             // Simple contour detection using connected components
             var validContours = new List<(Rectangle bounds, double area)>();
-            
+
             // Find connected white regions
             var visited = new bool[processedFrame.Width, processedFrame.Height];
             
@@ -331,6 +394,14 @@ public class LineDetectionCameraService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Attempts to detect line position using column sum method (fallback detection)
+    /// Calculates sum of white pixels in each vertical column
+    /// Line position is column with maximum white pixel count
+    /// Used when contour-based detection fails
+    /// </summary>
+    /// <param name="processedFrame">Binary processed frame (L8 grayscale)</param>
+    /// <returns>Column index with maximum white pixels, or null if no white pixels found</returns>
     private int? TryColumnSumDetection(Image<L8> processedFrame)
     {
         try
@@ -369,11 +440,21 @@ public class LineDetectionCameraService : IDisposable
         }
     }
     
+    /// <summary>
+    /// Performs flood fill algorithm to find bounding rectangle of a connected white region
+    /// Uses stack-based approach to traverse all connected white pixels
+    /// Used by contour detection to identify line segments
+    /// </summary>
+    /// <param name="image">Binary image to analyze</param>
+    /// <param name="visited">2D array tracking already-visited pixels</param>
+    /// <param name="startX">Starting X coordinate</param>
+    /// <param name="startY">Starting Y coordinate</param>
+    /// <returns>Bounding rectangle containing all connected white pixels</returns>
     private Rectangle FloodFillBounds(Image<L8> image, bool[,] visited, int startX, int startY)
     {
         var stack = new Stack<(int x, int y)>();
         stack.Push((startX, startY));
-        
+
         int minX = startX, maxX = startX;
         int minY = startY, maxY = startY;
         
@@ -467,9 +548,12 @@ public class LineDetectionCameraService : IDisposable
     }
 
     /// <summary>
-    /// Detect line from a specific frame without updating internal state
+    /// Detects line from a specific frame without updating internal line memory state
     /// Used for generating annotated images without affecting main detection logic
+    /// Returns standalone detection result for visualization purposes
     /// </summary>
+    /// <param name="frame">Camera frame to analyze</param>
+    /// <returns>Line detection result without side effects on service state</returns>
     private LineDetectionResult DetectLineFromFrame(Image<Rgb24> frame)
     {
         var linePosition = ProcessFrame(frame, null);
@@ -489,6 +573,14 @@ public class LineDetectionCameraService : IDisposable
         };
     }
 
+    /// <summary>
+    /// Draws visual indicators on camera frame for debugging and monitoring
+    /// Adds blue center line, yellow ROI boundary, green detected line, and red/cyan error indicator
+    /// Used for web dashboard visualization of line detection status
+    /// </summary>
+    /// <param name="frame">Frame to draw on (modified in place)</param>
+    /// <param name="linePosition">Detected line position in pixels, or null if no line</param>
+    /// <param name="frameCenter">Center pixel position of frame</param>
     private void DrawLineIndicators(Image<Rgb24> frame, int? linePosition, int frameCenter)
     {
         try
@@ -529,8 +621,16 @@ public class LineDetectionCameraService : IDisposable
 
 
     /// <summary>
-    /// Create a binary mask based on color matching with tolerance
+    /// Creates a binary mask based on color matching with tolerance
+    /// Uses Euclidean distance in RGB space to identify target color pixels
+    /// Pixels within tolerance (default 30) are marked as white, others as black
+    /// Applies Gaussian blur to smooth the mask for better contour detection
     /// </summary>
+    /// <param name="colorFrame">RGB frame to process</param>
+    /// <param name="targetR">Target red component (0-255)</param>
+    /// <param name="targetG">Target green component (0-255)</param>
+    /// <param name="targetB">Target blue component (0-255)</param>
+    /// <returns>Binary mask (L8 grayscale) where white = target color detected</returns>
     private Image<L8> CreateColorMask(Image<Rgb24> colorFrame, byte targetR, byte targetG, byte targetB)
     {
         var mask = new Image<L8>(colorFrame.Width, colorFrame.Height);
@@ -566,6 +666,11 @@ public class LineDetectionCameraService : IDisposable
         return mask;
     }
 
+    /// <summary>
+    /// Clears the 3-second line memory cache
+    /// Forces next detection to use direct frame processing instead of memory
+    /// Called when robot changes navigation modes or loses line tracking
+    /// </summary>
     public void ResetLineMemory()
     {
         _lastLinePosition = null;
@@ -574,8 +679,13 @@ public class LineDetectionCameraService : IDisposable
     }
 
     /// <summary>
-    /// Check if target floor color is detected near the line
+    /// Checks if target floor color is detected in the ROI region
+    /// Samples pixels in center region near line and calculates color match percentage
+    /// Used for beacon-based room detection by matching floor color markers
+    /// Returns true if >50% of sampled pixels match the target color
     /// </summary>
+    /// <param name="targetColor">RGB color array [R,G,B] to detect</param>
+    /// <returns>True if target color is detected (>50% pixel match), false otherwise</returns>
     public bool DetectFloorColor(byte[]? targetColor)
     {
         if (targetColor == null || targetColor.Length < 3)
@@ -616,6 +726,11 @@ public class LineDetectionCameraService : IDisposable
         return totalSamples > 0 && (matchCount * 100 / totalSamples) > 50;
     }
 
+    /// <summary>
+    /// Disposes resources used by the line detection service
+    /// Clears JPEG cache and releases any held resources
+    /// Called when service is shut down or application terminates
+    /// </summary>
     public void Dispose()
     {
         try

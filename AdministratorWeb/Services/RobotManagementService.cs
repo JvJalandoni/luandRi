@@ -5,37 +5,67 @@ using System.Collections.Concurrent;
 
 namespace AdministratorWeb.Services
 {
+    /// <summary>
+    /// Interface for managing robot fleet operations and status
+    /// </summary>
     public interface IRobotManagementService
     {
+        /// <summary>Registers a robot when it connects to the server</summary>
         Task<bool> RegisterRobotAsync(string name, string ipAddress);
+        /// <summary>Updates the last seen time for a robot (heartbeat)</summary>
         Task<bool> PingRobotAsync(string name, string ipAddress);
+        /// <summary>Updates robot's camera and line detection data</summary>
         Task<bool> UpdateRobotCameraDataAsync(string name, RobotCameraData cameraData);
+        /// <summary>Updates robot's detected bluetooth beacons list</summary>
         Task<bool> UpdateRobotDetectedBeaconsAsync(string name, List<RobotProject.Shared.DTOs.BeaconInfo> detectedBeacons);
+        /// <summary>Gets a specific robot by name</summary>
         Task<ConnectedRobot?> GetRobotAsync(string name);
+        /// <summary>Gets all connected robots</summary>
         Task<List<ConnectedRobot>> GetAllRobotsAsync();
+        /// <summary>Toggles robot active/inactive status</summary>
         Task<bool> ToggleRobotStatusAsync(string name);
+        /// <summary>Toggles whether robot can accept new requests</summary>
         Task<bool> ToggleAcceptRequestsAsync(string name);
+        /// <summary>Sets robot's current task description</summary>
         Task<bool> SetRobotTaskAsync(string name, string? task);
+        /// <summary>Commands robot to start or stop line following</summary>
         Task<bool> SetLineFollowingAsync(string name, bool followLine);
+        /// <summary>Commands robot to perform 180-degree turn</summary>
         Task<bool> TurnAroundAsync(string name);
+        /// <summary>Removes robot from connected robots list</summary>
         Task<bool> DisconnectRobotAsync(string name);
-        Task CancelOfflineRobotRequestsAsync(); // Add method to handle offline robots
+        /// <summary>Cancels active requests for robots that have gone offline</summary>
+        Task CancelOfflineRobotRequestsAsync();
     }
 
+    /// <summary>
+    /// Service for managing robot fleet operations, status, and real-time data
+    /// Maintains in-memory registry of all connected robots and their states
+    /// Runs as a background hosted service to monitor offline robots
+    /// </summary>
     public class RobotManagementService : IRobotManagementService, IHostedService
-    {  
+    {
         private readonly ConcurrentDictionary<string, ConnectedRobot> _connectedRobots = new();
         private readonly ILogger<RobotManagementService> _logger;
         private readonly IServiceProvider _serviceProvider;
         private Timer? _offlineCheckTimer;
         private readonly TimeSpan _startupDelay = TimeSpan.FromSeconds(30); // Wait 30 seconds on startup (reduced from 2 minutes)
 
+        /// <summary>
+        /// Initializes the robot management service
+        /// </summary>
+        /// <param name="logger">Logger for tracking robot operations</param>
+        /// <param name="serviceProvider">Service provider for accessing scoped services</param>
         public RobotManagementService(ILogger<RobotManagementService> logger, IServiceProvider serviceProvider)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
         }
 
+        /// <summary>
+        /// Starts the background service for monitoring robots
+        /// Currently has offline cancellation disabled to prevent aggressive timeouts
+        /// </summary>
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Starting Robot Management Service (offline request cancellation DISABLED)");
@@ -47,6 +77,9 @@ namespace AdministratorWeb.Services
             await Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Stops the background service and cleans up resources
+        /// </summary>
         public async Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Stopping Robot Management Service");
@@ -55,7 +88,9 @@ namespace AdministratorWeb.Services
         }
 
         /// <summary>
-        /// Cancel requests for robots that have gone offline
+        /// Cancels active requests for robots that have gone offline
+        /// Checks all offline robots and automatically cancels their assigned requests
+        /// Prevents customers from waiting indefinitely for offline robots
         /// </summary>
         public async Task CancelOfflineRobotRequestsAsync()
         {
@@ -101,6 +136,13 @@ namespace AdministratorWeb.Services
             }
         }
 
+        /// <summary>
+        /// Registers a robot when it first connects to the server
+        /// Creates new robot entry or updates existing robot's IP address
+        /// </summary>
+        /// <param name="name">Unique robot name</param>
+        /// <param name="ipAddress">Robot's IP address for direct communication</param>
+        /// <returns>True if robot was already registered, false if newly registered</returns>
         public async Task<bool> RegisterRobotAsync(string name, string ipAddress)
         {
             if (string.IsNullOrEmpty(name))
@@ -151,6 +193,14 @@ namespace AdministratorWeb.Services
             return await Task.FromResult(!isNewRobot);
         }
 
+        /// <summary>
+        /// Updates robot's last ping time to indicate it's still online
+        /// Called every second by robots to maintain connection status
+        /// Auto-registers robot if not already registered
+        /// </summary>
+        /// <param name="name">Robot name</param>
+        /// <param name="ipAddress">Robot's current IP address</param>
+        /// <returns>True if successful</returns>
         public async Task<bool> PingRobotAsync(string name, string ipAddress)
         {
             if (string.IsNullOrEmpty(name))
@@ -172,6 +222,13 @@ namespace AdministratorWeb.Services
             return await Task.FromResult(true);
         }
 
+        /// <summary>
+        /// Updates robot's camera feed and line detection data
+        /// Stores latest camera frame, line position, and detection status
+        /// </summary>
+        /// <param name="name">Robot name</param>
+        /// <param name="cameraData">Camera data including line detection results</param>
+        /// <returns>True if successful, false if robot not found</returns>
         public async Task<bool> UpdateRobotCameraDataAsync(string name, RobotCameraData cameraData)
         {
             if (string.IsNullOrEmpty(name))
@@ -191,6 +248,11 @@ namespace AdministratorWeb.Services
             return await Task.FromResult(false);
         }
 
+        /// <summary>
+        /// Gets a specific robot by name (case-insensitive)
+        /// </summary>
+        /// <param name="name">Robot name to look up</param>
+        /// <returns>Robot data if found, null otherwise</returns>
         public async Task<ConnectedRobot?> GetRobotAsync(string name)
         {
             if (string.IsNullOrEmpty(name))
@@ -204,11 +266,22 @@ namespace AdministratorWeb.Services
             return await Task.FromResult(robot);
         }
 
+        /// <summary>
+        /// Gets all robots currently in the fleet registry
+        /// Includes both online and offline robots
+        /// </summary>
+        /// <returns>List of all connected robots</returns>
         public async Task<List<ConnectedRobot>> GetAllRobotsAsync()
         {
             return await Task.FromResult(_connectedRobots.Values.ToList());
         }
 
+        /// <summary>
+        /// Toggles robot's active/inactive status
+        /// Inactive robots won't be assigned to new requests
+        /// </summary>
+        /// <param name="name">Robot name</param>
+        /// <returns>True if successful, false if robot not found</returns>
         public async Task<bool> ToggleRobotStatusAsync(string name)
         {
             var robot = _connectedRobots.Values.FirstOrDefault(r =>
@@ -224,6 +297,12 @@ namespace AdministratorWeb.Services
             return await Task.FromResult(false);
         }
 
+        /// <summary>
+        /// Toggles whether robot can accept new requests
+        /// Used for maintenance or testing without fully deactivating robot
+        /// </summary>
+        /// <param name="name">Robot name</param>
+        /// <returns>True if successful, false if robot not found</returns>
         public async Task<bool> ToggleAcceptRequestsAsync(string name)
         {
             var robot = _connectedRobots.Values.FirstOrDefault(r =>
@@ -239,6 +318,13 @@ namespace AdministratorWeb.Services
             return await Task.FromResult(false);
         }
 
+        /// <summary>
+        /// Sets robot's current task description and updates status
+        /// Sets robot to Busy if task assigned, Available if task cleared
+        /// </summary>
+        /// <param name="name">Robot name</param>
+        /// <param name="task">Task description (null to clear)</param>
+        /// <returns>True if successful, false if robot not found</returns>
         public async Task<bool> SetRobotTaskAsync(string name, string? task)
         {
             var robot = _connectedRobots.Values.FirstOrDefault(r =>
@@ -254,6 +340,13 @@ namespace AdministratorWeb.Services
             return await Task.FromResult(false);
         }
 
+        /// <summary>
+        /// Commands robot to start or stop line following mode
+        /// Also persists robot state to database for crash recovery
+        /// </summary>
+        /// <param name="name">Robot name</param>
+        /// <param name="followLine">True to start line following, false to stop</param>
+        /// <returns>True if successful, false if robot not found</returns>
         public async Task<bool> SetLineFollowingAsync(string name, bool followLine)
         {
             var robot = _connectedRobots.Values.FirstOrDefault(r =>
@@ -275,6 +368,11 @@ namespace AdministratorWeb.Services
             return await Task.FromResult(false);
         }
 
+        /// <summary>
+        /// Persists robot state to database for crash recovery
+        /// Saves robot configuration, location, and status
+        /// </summary>
+        /// <param name="robot">Robot whose state to persist</param>
         private async Task PersistRobotStateAsync(ConnectedRobot robot)
         {
             try
@@ -341,6 +439,12 @@ namespace AdministratorWeb.Services
             }
         }
 
+        /// <summary>
+        /// Sends HTTP command to robot to perform 180-degree turn
+        /// Directly communicates with robot's motor controller API
+        /// </summary>
+        /// <param name="name">Robot name</param>
+        /// <returns>True if command sent successfully, false otherwise</returns>
         public async Task<bool> TurnAroundAsync(string name)
         {
             var robot = _connectedRobots.Values.FirstOrDefault(r =>
@@ -381,6 +485,12 @@ namespace AdministratorWeb.Services
             }
         }
 
+        /// <summary>
+        /// Removes robot from the connected robots registry
+        /// Used when robot explicitly disconnects or for cleanup
+        /// </summary>
+        /// <param name="name">Robot name to disconnect</param>
+        /// <returns>True if robot was found and removed, false otherwise</returns>
         public async Task<bool> DisconnectRobotAsync(string name)
         {
             if (_connectedRobots.TryRemove(name, out var robot))
@@ -392,6 +502,14 @@ namespace AdministratorWeb.Services
             return await Task.FromResult(false);
         }
 
+        /// <summary>
+        /// Updates robot's detected bluetooth beacons list with RSSI values
+        /// Calculates distances, tracks detection counts, and manages beacon timeouts
+        /// Marks beacons as Lost or Timeout if not detected recently
+        /// </summary>
+        /// <param name="name">Robot name</param>
+        /// <param name="detectedBeacons">List of currently detected beacons with RSSI</param>
+        /// <returns>True if successful, false if robot not found</returns>
         public async Task<bool> UpdateRobotDetectedBeaconsAsync(string name,
             List<RobotProject.Shared.DTOs.BeaconInfo> detectedBeacons)
         {
@@ -491,9 +609,12 @@ namespace AdministratorWeb.Services
             // Update robot ping time as beacon updates count as activity
             robot.LastPing = currentTime;
 
-            return await Task.FromResult(true); 
+            return await Task.FromResult(true);
         }
 
+        /// <summary>
+        /// Disposes of service resources including the offline check timer
+        /// </summary>
         public void Dispose()
         {
             _offlineCheckTimer?.Dispose();

@@ -70,6 +70,12 @@ namespace LineFollowerRobot.Services
             }
         }
 
+        /// <summary>
+        /// Initializes the HX711 weight sensor service with calibrated parameters
+        /// Sets up GPIO pin mappings and calibration values (offset=-37000, referenceUnit=205.5)
+        /// Configured for 1.01kg container tare compensation
+        /// </summary>
+        /// <param name="logger">Logger for diagnostic output</param>
         public Hx711Service(ILogger<Hx711Service> logger)
         {
             _logger = logger;
@@ -82,6 +88,11 @@ namespace LineFollowerRobot.Services
             _logger.LogInformation("   Reading Interval: {IntervalMs}ms", _readingIntervalMs);
         }
 
+        /// <summary>
+        /// Starts the HX711 service and initializes GPIO pins
+        /// Opens data pin (18) as input and clock pin (23) as output
+        /// Performs test reading to verify sensor connectivity
+        /// </summary>
         public override async Task StartAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Starting HX711 Weight Sensor Service...");
@@ -95,7 +106,7 @@ namespace LineFollowerRobot.Services
                 _gpio.Write(_clockPin, PinValue.Low);
 
                 _logger.LogInformation("HX711 GPIO pins initialized successfully");
-                
+
                 // Test initial reading
                 var testReading = await ReadRawValue();
                 _logger.LogInformation("Initial test reading: {RawValue}", testReading);
@@ -109,6 +120,12 @@ namespace LineFollowerRobot.Services
             }
         }
 
+        /// <summary>
+        /// Background task that continuously reads weight every 100ms
+        /// Calculates stability based on last 5 readings (must vary by <2g to be stable)
+        /// Emits WeightChanged events and logs readings every 5 seconds
+        /// Automatically subtracts 1.01kg container tare weight from all readings
+        /// </summary>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("HX711 weight reading service started - taking readings every {IntervalMs}ms", _readingIntervalMs);
@@ -119,14 +136,14 @@ namespace LineFollowerRobot.Services
                 {
                     var reading = await TakeWeightReading();
                     UpdateCurrentWeight(reading);
-                    
+
                     // Emit weight changed event
                     WeightChanged?.Invoke(this, new WeightReadingEventArgs(reading));
 
                     // Log periodically (every 5 seconds)
                     if (DateTime.Now.Second % 5 == 0 && DateTime.Now.Millisecond < _readingIntervalMs)
                     {
-                        _logger.LogInformation("Weight: {WeightGrams:F1}g ({WeightKg:F3}kg) | Raw: {RawValue} | Stable: {IsStable}", 
+                        _logger.LogInformation("Weight: {WeightGrams:F1}g ({WeightKg:F3}kg) | Raw: {RawValue} | Stable: {IsStable}",
                             reading.WeightGrams, reading.WeightKg, reading.RawValue, reading.IsStable);
                     }
 
@@ -147,8 +164,11 @@ namespace LineFollowerRobot.Services
         }
 
         /// <summary>
-        /// Take a complete weight reading with stability calculation
+        /// Takes a complete weight reading with calibration and tare compensation
+        /// Reads raw 24-bit value from HX711, applies calibration formula: (raw - offset) / referenceUnit
+        /// Subtracts 1.01kg container weight and calculates stability based on recent readings
         /// </summary>
+        /// <returns>WeightReading with grams, kg, timestamp, and stability flag</returns>
         private async Task<WeightReading> TakeWeightReading()
         {
             var rawValue = await ReadRawValue();
@@ -177,8 +197,12 @@ namespace LineFollowerRobot.Services
         }
 
         /// <summary>
-        /// Read raw value from HX711 - exact copy of your Program.cs logic
+        /// Reads raw 24-bit value from HX711 ADC using bit-banging protocol
+        /// Waits for data pin to go low (sensor ready), then clocks out 24 bits + 1 gain bit
+        /// Converts unsigned 24-bit to signed value using two's complement
+        /// Times out after 1 second if sensor not ready (check wiring if this occurs)
         /// </summary>
+        /// <returns>Signed 24-bit raw weight value from ADC</returns>
         private async Task<long> ReadRawValue()
         {
             if (_gpio == null)
@@ -231,8 +255,11 @@ namespace LineFollowerRobot.Services
         }
 
         /// <summary>
-        /// Update current weight values thread-safely
+        /// Updates current weight values in a thread-safe manner using lock
+        /// Called after each successful weight reading to update public properties
+        /// Ensures atomic updates when accessed from multiple threads
         /// </summary>
+        /// <param name="reading">Weight reading to store</param>
         private void UpdateCurrentWeight(WeightReading reading)
         {
             lock (_weightLock)
@@ -243,8 +270,13 @@ namespace LineFollowerRobot.Services
         }
 
         /// <summary>
-        /// Calculate if current reading is stable based on recent readings
+        /// Calculates if current reading is stable based on recent readings
+        /// Maintains sliding window of last 5 readings and checks if range is within 2g threshold
+        /// Returns true only if window is full (5 readings) and max-min <= 2g
+        /// Used to determine when weight has settled before recording final measurement
         /// </summary>
+        /// <param name="currentWeightGrams">Current weight reading in grams</param>
+        /// <returns>True if weight is stable (5+ readings within 2g range), false otherwise</returns>
         private bool CalculateStability(double currentWeightGrams)
         {
             lock (_recentReadings)
@@ -271,8 +303,11 @@ namespace LineFollowerRobot.Services
         }
 
         /// <summary>
-        /// Get current weight reading
+        /// Gets the current weight reading in a thread-safe manner
+        /// Returns snapshot of last recorded weight with current timestamp
+        /// Assumes reading is stable (use WeightChanged event for real-time stability)
         /// </summary>
+        /// <returns>WeightReading with current weight in grams and kg</returns>
         public WeightReading GetCurrentReading()
         {
             lock (_weightLock)
@@ -287,12 +322,21 @@ namespace LineFollowerRobot.Services
             }
         }
 
+        /// <summary>
+        /// Stops the background weight reading service
+        /// Gracefully shuts down the continuous reading loop
+        /// </summary>
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Stopping HX711 Weight Sensor Service...");
             await base.StopAsync(cancellationToken);
         }
 
+        /// <summary>
+        /// Disposes GPIO resources used by the HX711 sensor
+        /// Releases GPIO controller and closes data/clock pins
+        /// Called when service is shut down or application terminates
+        /// </summary>
         public override void Dispose()
         {
             try

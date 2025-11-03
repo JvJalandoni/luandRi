@@ -16,6 +16,18 @@ import { formatRelativeTime } from '../../utils/dateUtils';
 
 import { useCustomAlert } from '../../components/CustomAlert';
 
+/**
+ * History Screen - Displays customer's complete laundry request history
+ * Features:
+ * - List of all past and current requests sorted by date (newest first)
+ * - Status badges with color coding (completed, cancelled, declined, etc.)
+ * - Tap request to view full details
+ * - Pull-to-refresh support
+ * - Auto-refresh when screen gains focus
+ * - Empty state message when no requests exist
+ *
+ * @returns React component displaying request history list
+ */
 export default function HistoryScreen() {
   const router = useRouter();
   const [requests, setRequests] = useState<LaundryRequestResponse[]>([]);
@@ -32,6 +44,11 @@ export default function HistoryScreen() {
   const dangerColor = useThemeColor({}, 'danger');
   const warningColor = useThemeColor({}, 'warning');
 
+  /**
+   * Loads all laundry requests for the current user from the server
+   * Sorts requests by date (newest first) and updates state
+   * Handles errors with alert display
+   */
   const loadRequests = async () => {
     try {
       setIsLoading(true);
@@ -55,6 +72,12 @@ export default function HistoryScreen() {
     }, [])
   );
 
+  /**
+   * Converts backend status enum to lowercase string for display and logic
+   * Maps numeric status codes (0-11) to readable status strings
+   * @param status - Numeric status code from backend
+   * @returns Lowercase status string (e.g., 'completed', 'pending', 'cancelled')
+   */
   const getStatusString = (status: any): string => {
     // Convert backend enum to string
     switch (Number(status)) {
@@ -74,6 +97,12 @@ export default function HistoryScreen() {
     }
   };
 
+  /**
+   * Returns appropriate color for status badge based on request status
+   * Completed/accepted = primary, pending = warning, declined/cancelled = danger
+   * @param status - Request status code
+   * @returns Theme color for status badge
+   */
   const getStatusColor = (status: any) => {
     const statusStr = getStatusString(status);
     switch (statusStr) {
