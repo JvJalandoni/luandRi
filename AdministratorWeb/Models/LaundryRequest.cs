@@ -102,6 +102,9 @@ namespace AdministratorWeb.Models
         /// <summary>Weight of laundry in kilograms (measured after pickup)</summary>
         public decimal? Weight { get; set; }
 
+        /// <summary>Indicates if the current weight exceeds the maximum allowed weight</summary>
+        public bool IsWeightExceeded { get; set; } = false;
+
         /// <summary>Total cost in pesos calculated from weight × price per kg</summary>
         public decimal? TotalCost { get; set; }
 

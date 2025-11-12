@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
 
-const API_BASE_URL = 'https://laundry.nexusph.site/api';
+const API_BASE_URL = 'http://140.245.51.90:23000/api';
 
 export interface Message {
   id: number;

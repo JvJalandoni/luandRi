@@ -4,7 +4,7 @@ import axios from 'axios';
 /**
  * Base URL for all API requests to the laundry robot backend server
  */
-const API_BASE_URL = 'https://laundry.nexusph.site/api';
+const API_BASE_URL = 'http://140.245.51.90:23000/api';
 
 /**
  * Helper function to get authentication headers with JWT token

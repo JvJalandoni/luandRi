@@ -252,6 +252,9 @@ namespace AdministratorWeb.Migrations
                     b.Property<bool>("IsPaid")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("IsWeightExceeded")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<DateTime?>("LaundryLoadedAt")
                         .HasColumnType("datetime(6)");
 

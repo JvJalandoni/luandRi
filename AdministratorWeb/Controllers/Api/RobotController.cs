@@ -143,7 +143,7 @@ namespace AdministratorWeb.Controllers.Api
                     request.DetectedBeacons ?? new List<RobotProject.Shared.DTOs.BeaconInfo>());
 
                 // Update robot weight data
-                await UpdateRobotWeightData(name, request.WeightKg);
+                await UpdateRobotWeightData(name, request.WeightKg, request.IsWeightExceeded);
 
                 // Update robot ultrasonic sensor data
                 await UpdateRobotUltrasonicData(name, request.USSensor1ObstacleDistance);
@@ -983,7 +983,7 @@ namespace AdministratorWeb.Controllers.Api
         /// <summary>
         /// Update robot's weight sensor reading and assigned request weight
         /// </summary>
-        private async Task UpdateRobotWeightData(string robotName, double weightKg)
+        private async Task UpdateRobotWeightData(string robotName, double weightKg, bool isWeightExceeded)
         {
             try
             {
@@ -991,7 +991,8 @@ namespace AdministratorWeb.Controllers.Api
                 if (robot != null)
                 {
                     robot.WeightKg = weightKg;
-                    _logger.LogDebug("Updated weight for robot {RobotName}: {WeightKg}kg", robotName, weightKg);
+                    _logger.LogDebug("Updated weight for robot {RobotName}: {WeightKg}kg, Exceeded: {IsExceeded}",
+                        robotName, weightKg, isWeightExceeded);
 
                     // Find ALL active requests assigned to this robot that are in ArrivedAtRoom status
                     var arrivedRequests = await _context.LaundryRequests
@@ -1004,14 +1005,23 @@ namespace AdministratorWeb.Controllers.Api
                         foreach (var request in arrivedRequests)
                         {
                             request.Weight = (decimal)weightKg;
-                            _logger.LogDebug("Updated weight for ArrivedAtRoom request {RequestId}: {WeightKg}kg",
-                                request.Id, weightKg);
+                            request.IsWeightExceeded = isWeightExceeded;
+
+                            if (isWeightExceeded)
+                            {
+                                _logger.LogWarning(
+                                    "⚠️ Weight exceeded for request {RequestId}: {WeightKg}kg exceeds maximum allowed weight",
+                                    request.Id, weightKg);
+                            }
+
+                            _logger.LogDebug("Updated weight for ArrivedAtRoom request {RequestId}: {WeightKg}kg, Exceeded: {IsExceeded}",
+                                request.Id, weightKg, isWeightExceeded);
                         }
 
                         await _context.SaveChangesAsync();
                         _logger.LogInformation(
-                            "Updated weight for {Count} ArrivedAtRoom requests for robot {RobotName}: {WeightKg}kg",
-                            arrivedRequests.Count, robotName, weightKg);
+                            "Updated weight for {Count} ArrivedAtRoom requests for robot {RobotName}: {WeightKg}kg, Exceeded: {IsExceeded}",
+                            arrivedRequests.Count, robotName, weightKg, isWeightExceeded);
                     }
                 }
             }

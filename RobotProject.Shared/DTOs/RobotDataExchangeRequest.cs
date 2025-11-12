@@ -92,5 +92,11 @@ namespace RobotProject.Shared.DTOs
         /// </summary>
         public double USSensor1ObstacleDistance { get; set; } = 0.0;
 
+        /// <summary>
+        /// Indicates if the current weight exceeds the maximum allowed weight per request
+        /// When true, the mobile app should display a warning and prevent laundry confirmation
+        /// </summary>
+        public bool IsWeightExceeded { get; set; } = false;
+
     }
 }
