@@ -27,6 +27,10 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
     // Public property to expose active beacons
     public List<BeaconConfigurationDto>? ActiveBeacons { get; private set; }
 
+    // Weight limit from server
+    private decimal? _maxWeightKg = null;
+    private readonly object _maxWeightLock = new();
+
     public RobotServerCommunicationService(
         ILogger<RobotServerCommunicationService> logger,
         BluetoothBeaconService beaconService,
@@ -144,6 +148,23 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
             // Get current ultrasonic distance
             double ultrasonicDistance = GetUltrasonicDistance();
 
+            // Check if weight exceeds maximum allowed weight
+            bool isWeightExceeded = false;
+            lock (_maxWeightLock)
+            {
+                if (_maxWeightKg.HasValue && _maxWeightKg.Value > 0)
+                {
+                    isWeightExceeded = (decimal)currentWeightKg > _maxWeightKg.Value;
+
+                    if (isWeightExceeded)
+                    {
+                        _logger.LogWarning(
+                            "⚠️ WEIGHT EXCEEDED: Current weight {CurrentWeight:F2}kg exceeds maximum allowed {MaxWeight:F2}kg",
+                            currentWeightKg, _maxWeightKg.Value);
+                    }
+                }
+            }
+
             // Create request payload
             var request = new RobotDataExchangeRequest
             {
@@ -152,7 +173,8 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
                 DetectedBeacons = detectedBeacons,
                 IsInTarget = isInTarget,
                 WeightKg = currentWeightKg,
-                USSensor1ObstacleDistance = ultrasonicDistance
+                USSensor1ObstacleDistance = ultrasonicDistance,
+                IsWeightExceeded = isWeightExceeded
             };
 
             // Serialize request to JSON
@@ -369,6 +391,19 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
                 _logger.LogInformation("Server requested data exchange interval change to {IntervalSeconds}s",
                     serverResponse.DataExchangeIntervalSeconds);
                 // TODO: Implement dynamic interval adjustment
+            }
+
+            // Update max weight limit from server
+            if (serverResponse.MaxWeightKg.HasValue)
+            {
+                lock (_maxWeightLock)
+                {
+                    if (_maxWeightKg != serverResponse.MaxWeightKg)
+                    {
+                        _maxWeightKg = serverResponse.MaxWeightKg;
+                        _logger.LogInformation("Updated max weight limit from server: {MaxWeight:F2}kg", _maxWeightKg.Value);
+                    }
+                }
             }
         }
         catch (Exception ex)

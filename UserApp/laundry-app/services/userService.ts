@@ -51,10 +51,10 @@ export const getAdmins = async (): Promise<Admin[]> => {
       throw new Error('Authentication required');
     }
 
-    console.log('🔵 Fetching admins from: https://laundry.nexusph.site/api/user/admins');
+    console.log('🔵 Fetching admins from: http://140.245.51.90:23000/api/user/admins');
 
     // HARDCODED URL - same fix as web dashboard
-    const response = await axios.get('https://laundry.nexusph.site/api/user/admins', {
+    const response = await axios.get('http://140.245.51.90:23000/api/user/admins', {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'

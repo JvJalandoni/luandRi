@@ -254,7 +254,7 @@ export default function SupportScreen() {
 
           {item.imageUrl && (
             <Image
-              source={{ uri: `https://laundry.nexusph.site${item.imageUrl}` }}
+              source={{ uri: `http://140.245.51.90:23000${item.imageUrl}` }}
               style={styles.messageImage}
               resizeMode="cover"
             />
