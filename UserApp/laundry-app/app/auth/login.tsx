@@ -42,7 +42,18 @@ export default function LoginScreen() {
                         await login(username.trim(), password.trim());
                         router.replace('/(tabs)');
                 } catch (error: any) {
-                        showAlert('Login Failed', error.response?.data?.message || 'Please check your credentials');
+                        // Check if it's a network error (no response from server)
+                        if (!error.response) {
+                                showAlert('Connection Error', 'Service is offline or not reachable. Please check your internet connection and try again.');
+                        }
+                        // Check if it's an authentication error
+                        else if (error.response.status === 401 || error.response.status === 400) {
+                                showAlert('Login Failed', error.response?.data?.message || 'Invalid username or password');
+                        }
+                        // Other server errors
+                        else {
+                                showAlert('Error', error.response?.data?.message || 'An unexpected error occurred. Please try again.');
+                        }
                 } finally {
                         setIsLoading(false);
                 }
