@@ -45,14 +45,18 @@ export default function ReceiptDetailsScreen() {
     try {
       setIsLoading(true);
 
-      // Load request data and company settings in parallel
-      const [requestData, settingsResponse] = await Promise.all([
-        laundryService.getRequestStatus(Number(requestId)),
-        fetch(`${authService.getBaseUrl()}/api/settings`).then(res => res.json())
-      ]);
+      // Load request data (company settings included in response)
+      const requestData = await laundryService.getRequestStatus(Number(requestId));
 
       setRequest(requestData);
-      setCompanySettings(settingsResponse);
+
+      // Extract company settings from request data
+      setCompanySettings({
+        companyName: requestData.companyName || '',
+        companyAddress: requestData.companyAddress || '',
+        companyPhone: requestData.companyPhone || '',
+        companyEmail: requestData.companyEmail || ''
+      });
     } catch (error: any) {
       console.error('Error loading receipt:', error);
       showAlert('Error', 'Failed to load receipt');
