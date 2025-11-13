@@ -189,9 +189,9 @@ class RealtimeRequestsManager {
                                         ${request.weight ? `<div class="text-sm text-white font-medium">${request.weight} kg</div>` : ''}
                                         ${request.assignedRobotName ? `
                                             <div class="mt-2 inline-flex items-center px-2 py-1 bg-brand-900/50 text-brand-300 border border-brand-700/50 rounded-lg text-xs font-medium">
-                                                <i data-lucide="bot" class="w-3 h-3 mr-1.5"></i>
-                                                <span class="font-semibold">Robot:</span>
-                                                <span class="ml-1">${request.assignedRobotName}</span>
+                                                <i data-lucide="${request.assignedRobotName === 'WALK_IN' ? 'user' : 'bot'}" class="w-3 h-3 mr-1.5"></i>
+                                                <span class="font-semibold">${request.assignedRobotName === 'WALK_IN' ? '' : 'Robot: '}</span>
+                                                <span class="${request.assignedRobotName === 'WALK_IN' ? '' : 'ml-1'}">${request.assignedRobotName === 'WALK_IN' ? 'Walk In' : request.assignedRobotName}</span>
                                             </div>
                                         ` : ''}
                                     </div>
