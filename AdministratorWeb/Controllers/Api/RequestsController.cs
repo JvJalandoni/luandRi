@@ -252,6 +252,9 @@ namespace AdministratorWeb.Controllers.Api
                 return NotFound();
             }
 
+            // Get company settings for receipt display
+            var settings = await _context.LaundrySettings.FirstOrDefaultAsync();
+
             return Ok(new
             {
                 request.Id,
@@ -277,7 +280,12 @@ namespace AdministratorWeb.Controllers.Api
                 request.DeclineReason,
                 request.RoomName,
                 request.AssignedBeaconMacAddress,
-                request.IsPaid
+                request.IsPaid,
+                // Company info for receipt
+                CompanyName = settings?.CompanyName,
+                CompanyAddress = settings?.CompanyAddress,
+                CompanyPhone = settings?.CompanyPhone,
+                CompanyEmail = settings?.CompanyEmail
             });
         }
 
