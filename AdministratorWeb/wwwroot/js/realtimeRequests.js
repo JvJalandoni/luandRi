@@ -4,14 +4,14 @@ class RealtimeRequestsManager {
         this.isRefreshing = false;
         this.lastUpdateTime = null;
         this.lastRequestsData = null;
+        this.lastRequestsHash = null; // Track if data changed
         this.timerDurationSeconds = 300; // Default 5 minutes
         this.timerInterval = null;
         this.currentPage = 1;
         this.pageSize = 10;
         this.selectedStatus = 'All';
         this.selectedCustomer = '';
-        this.selectedDateFrom = '';
-        this.selectedDateTo = '';
+        this.selectedDate = '';
         this.totalPages = 1;
         this.totalCount = 0;
         this.customerSearchTimeout = null;
@@ -56,10 +56,10 @@ class RealtimeRequestsManager {
         // Initial load
         this.refreshRequests();
 
-        // Refresh every 1 second
+        // Refresh every 3 seconds (optimized from 1s to reduce lag)
         this.refreshInterval = setInterval(() => {
             this.refreshRequests();
-        }, 1000);
+        }, 3000);
     }
 
     stopAutoRefresh() {
@@ -85,23 +85,27 @@ class RealtimeRequestsManager {
                 params.append('customer', this.selectedCustomer);
             }
 
-            // Add date filters if set
-            if (this.selectedDateFrom) {
-                params.append('dateFrom', this.selectedDateFrom);
-            }
-            if (this.selectedDateTo) {
-                params.append('dateTo', this.selectedDateTo);
+            // Add single date filter if set
+            if (this.selectedDate) {
+                params.append('dateFrom', this.selectedDate);
+                params.append('dateTo', this.selectedDate);
             }
 
             const response = await fetch(`/api/requests-data?${params}`);
             if (response.ok) {
                 const data = await response.json();
-                this.lastRequestsData = data;
-                this.totalPages = data.totalPages;
-                this.totalCount = data.totalCount;
-                this.updateRequestsDisplay(data);
-                this.updateStatsCards(data);
-                this.updatePaginationControls();
+
+                // Only update if data actually changed
+                const newHash = JSON.stringify(data.requests.map(r => ({ id: r.id, status: r.status })));
+                if (this.lastRequestsHash !== newHash) {
+                    this.lastRequestsData = data;
+                    this.lastRequestsHash = newHash;
+                    this.totalPages = data.totalPages;
+                    this.totalCount = data.totalCount;
+                    this.updateRequestsDisplay(data);
+                    this.updateStatsCards(data);
+                    this.updatePaginationControls();
+                }
                 this.lastUpdateTime = new Date();
             }
         } catch (error) {
@@ -493,21 +497,11 @@ class RealtimeRequestsManager {
             });
         }
 
-        // Date from filter
-        const dateFromFilter = document.getElementById('date-from-filter');
-        if (dateFromFilter) {
-            dateFromFilter.addEventListener('change', (e) => {
-                this.selectedDateFrom = e.target.value;
-                this.currentPage = 1; // Reset to first page
-                this.refreshRequests();
-            });
-        }
-
-        // Date to filter
-        const dateToFilter = document.getElementById('date-to-filter');
-        if (dateToFilter) {
-            dateToFilter.addEventListener('change', (e) => {
-                this.selectedDateTo = e.target.value;
+        // Single date filter
+        const dateFilter = document.getElementById('date-filter');
+        if (dateFilter) {
+            dateFilter.addEventListener('change', (e) => {
+                this.selectedDate = e.target.value;
                 this.currentPage = 1; // Reset to first page
                 this.refreshRequests();
             });
@@ -520,15 +514,13 @@ class RealtimeRequestsManager {
                 // Reset all filters
                 this.selectedStatus = 'All';
                 this.selectedCustomer = '';
-                this.selectedDateFrom = '';
-                this.selectedDateTo = '';
+                this.selectedDate = '';
                 this.currentPage = 1;
 
                 // Reset UI inputs
                 if (statusFilter) statusFilter.value = 'All';
                 if (customerFilter) customerFilter.value = '';
-                if (dateFromFilter) dateFromFilter.value = '';
-                if (dateToFilter) dateToFilter.value = '';
+                if (dateFilter) dateFilter.value = '';
 
                 // Refresh data
                 this.refreshRequests();
