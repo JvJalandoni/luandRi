@@ -6,6 +6,9 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
+  ActivityIndicator,
+  TextInput,
+  ScrollView,
 } from 'react-native';
 import { laundryService, LaundryRequestResponse } from '../../services/laundryService';
 import { useThemeColor } from '../../hooks/useThemeColor';
@@ -13,7 +16,6 @@ import { ThemedView } from '../../components/ThemedView';
 import { ThemedText } from '../../components/ThemedText';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { formatRelativeTime } from '../../utils/dateUtils';
-
 import { useCustomAlert } from '../../components/CustomAlert';
 
 /**
@@ -30,10 +32,22 @@ import { useCustomAlert } from '../../components/CustomAlert';
  */
 export default function HistoryScreen() {
   const router = useRouter();
-  const [requests, setRequests] = useState<LaundryRequestResponse[]>([]);
+  const [allRequests, setAllRequests] = useState<LaundryRequestResponse[]>([]);
+  const [filteredRequests, setFilteredRequests] = useState<LaundryRequestResponse[]>([]);
+  const [displayedRequests, setDisplayedRequests] = useState<LaundryRequestResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const { showAlert, AlertComponent } = useCustomAlert();
-  
+
+  // Filter states
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [hasMore, setHasMore] = useState(false);
+
   const backgroundColor = useThemeColor({}, 'background');
   const textColor = useThemeColor({}, 'text');
   const primaryColor = useThemeColor({}, 'primary');
@@ -53,11 +67,55 @@ export default function HistoryScreen() {
     try {
       setIsLoading(true);
       const userRequests = await laundryService.getUserRequests();
-      setRequests(userRequests.sort((a, b) => new Date(b.requestedAt || 0).getTime() - new Date(a.requestedAt || 0).getTime()));
+      const sorted = userRequests.sort((a, b) => new Date(b.requestedAt || 0).getTime() - new Date(a.requestedAt || 0).getTime());
+      setAllRequests(sorted);
+      setCurrentPage(1); // Reset to first page
     } catch (error: any) {
       showAlert('Error', 'Failed to load request history');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Apply filters when allRequests, statusFilter, or searchQuery changes
+  useEffect(() => {
+    let filtered = [...allRequests];
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(req => getStatusString(req.status) === statusFilter);
+    }
+
+    // Apply search filter (search by request ID or robot name)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(req =>
+        req.id.toString().includes(query) ||
+        (req.assignedRobot && req.assignedRobot.toLowerCase().includes(query))
+      );
+    }
+
+    setFilteredRequests(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [allRequests, statusFilter, searchQuery]);
+
+  // Apply pagination when filteredRequests or currentPage changes
+  useEffect(() => {
+    const startIndex = 0;
+    const endIndex = currentPage * itemsPerPage;
+    const paginatedData = filteredRequests.slice(startIndex, endIndex);
+
+    setDisplayedRequests(paginatedData);
+    setHasMore(endIndex < filteredRequests.length);
+  }, [filteredRequests, currentPage, itemsPerPage]);
+
+  const loadMore = () => {
+    if (!isLoadingMore && hasMore) {
+      setIsLoadingMore(true);
+      setTimeout(() => {
+        setCurrentPage(prev => prev + 1);
+        setIsLoadingMore(false);
+      }, 300);
     }
   };
 
@@ -202,25 +260,102 @@ export default function HistoryScreen() {
   const renderHeader = () => (
     <View style={styles.header}>
       <ThemedText style={styles.title}>Request History</ThemedText>
-      <ThemedText style={[styles.subtitle, { color: mutedColor }]}>Track your laundry requests</ThemedText>
+      <ThemedText style={[styles.subtitle, { color: mutedColor }]}>
+        {filteredRequests.length} {filteredRequests.length === 1 ? 'request' : 'requests'}
+        {statusFilter !== 'all' && ` (filtered by ${statusFilter})`}
+      </ThemedText>
+
+      {/* Search Bar */}
+      <View style={[styles.searchContainer, { backgroundColor: cardColor, borderColor: borderColor }]}>
+        <TextInput
+          style={[styles.searchInput, { color: textColor }]}
+          placeholder="Search by request ID or robot..."
+          placeholderTextColor={mutedColor}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      {/* Status Filter Chips */}
+      <View style={styles.filterChipsContainer}>
+        <ThemedText style={[styles.filterLabel, { color: mutedColor }]}>Filter:</ThemedText>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterChipsScroll}>
+          {['all', 'pending', 'accepted', 'inprogress', 'washing', 'completed', 'cancelled', 'declined'].map((status) => (
+            <TouchableOpacity
+              key={status}
+              style={[
+                styles.filterChip,
+                { backgroundColor: statusFilter === status ? primaryColor : cardColor, borderColor: borderColor }
+              ]}
+              onPress={() => setStatusFilter(status)}
+            >
+              <Text style={[
+                styles.filterChipText,
+                { color: statusFilter === status ? '#ffffff' : textColor }
+              ]}>
+                {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
     </View>
   );
 
   const renderEmpty = () => (
     <View style={styles.emptyState}>
-      <ThemedText style={[styles.emptyText, { color: mutedColor }]}>No requests yet</ThemedText>
-      <ThemedText style={[styles.emptySubtext, { color: mutedColor }]}>Your laundry requests will appear here</ThemedText>
+      <ThemedText style={[styles.emptyText, { color: mutedColor }]}>
+        {searchQuery || statusFilter !== 'all' ? 'No matching requests' : 'No requests yet'}
+      </ThemedText>
+      <ThemedText style={[styles.emptySubtext, { color: mutedColor }]}>
+        {searchQuery || statusFilter !== 'all' ? 'Try adjusting your filters' : 'Your laundry requests will appear here'}
+      </ThemedText>
     </View>
   );
+
+  const renderFooter = () => {
+    if (isLoadingMore) {
+      return (
+        <View style={styles.loadingMore}>
+          <ActivityIndicator size="small" color={primaryColor} />
+          <ThemedText style={[styles.loadingText, { color: mutedColor }]}>Loading more...</ThemedText>
+        </View>
+      );
+    }
+
+    if (hasMore) {
+      return (
+        <TouchableOpacity
+          style={[styles.loadMoreButton, { backgroundColor: cardColor, borderColor: borderColor }]}
+          onPress={loadMore}
+        >
+          <ThemedText style={[styles.loadMoreText, { color: primaryColor }]}>Load More</ThemedText>
+        </TouchableOpacity>
+      );
+    }
+
+    if (displayedRequests.length > 0) {
+      return (
+        <View style={styles.endMessage}>
+          <ThemedText style={[styles.endMessageText, { color: mutedColor }]}>
+            End of results
+          </ThemedText>
+        </View>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <ThemedView style={styles.container}>
       <FlatList
-        data={requests}
+        data={displayedRequests}
         renderItem={renderRequestCard}
         keyExtractor={(item) => item.id.toString()}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
+        ListFooterComponent={renderFooter}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={isLoading} onRefresh={loadRequests} />
@@ -229,11 +364,6 @@ export default function HistoryScreen() {
         maxToRenderPerBatch={10}
         windowSize={10}
         removeClippedSubviews={true}
-        getItemLayout={(data, index) => ({
-          length: 350,
-          offset: 350 * index,
-          index,
-        })}
       />
       <AlertComponent />
     </ThemedView>
@@ -347,5 +477,66 @@ const styles = StyleSheet.create({
   trackButtonText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  searchContainer: {
+    marginTop: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  filterChipsContainer: {
+    marginTop: 12,
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  filterChipsScroll: {
+    flexGrow: 0,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loadingMore: {
+    padding: 20,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+  },
+  loadMoreButton: {
+    margin: 16,
+    marginTop: 8,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  endMessage: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  endMessageText: {
+    fontSize: 14,
   },
 });
