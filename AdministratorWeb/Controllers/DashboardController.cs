@@ -195,6 +195,11 @@ namespace AdministratorWeb.Controllers
                 TempData["Success"] = "Settings updated successfully.";
             }
 
+            // Get first available robot for camera feed
+            var robots = await _robotService.GetAllRobotsAsync();
+            var firstRobot = robots.FirstOrDefault();
+            ViewData["RobotName"] = firstRobot?.Name;
+
             return View(model);
         }
     }
