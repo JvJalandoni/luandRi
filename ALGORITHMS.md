@@ -1257,7 +1257,7 @@ flowchart TD
 
     CheckPaidStatus -->|Yes| LoadData[Load Receipt Data:<br/>Request.Id<br/>Request.TotalCost<br/>Request.Weight<br/>Request.CustomerName<br/>Request.CompletedAt<br/>Request.ScheduledAt]
 
-    LoadData --> GenReceiptNum[Generate Receipt Number:<br/>RCP-{Year}-{RequestId padded}]
+    LoadData --> GenReceiptNum[Generate Receipt Number:<br/>RCP-YYYY-NNNNNN format]
 
     GenReceiptNum --> CalcRate[Calculate Rate Per Kg:<br/>TotalCost / Weight]
 
