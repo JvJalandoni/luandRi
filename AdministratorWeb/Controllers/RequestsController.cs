@@ -640,12 +640,40 @@ namespace AdministratorWeb.Controllers
         }
 
         [HttpGet("/api/requests-data")]
-        public async Task<IActionResult> GetRequestsData()
+        public async Task<IActionResult> GetRequestsData([FromQuery] string? status = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
             try
             {
-                var requests = await _context.LaundryRequests
+                var query = _context.LaundryRequests.AsQueryable();
+
+                // Apply status filter if provided
+                if (!string.IsNullOrEmpty(status) && status != "All")
+                {
+                    if (Enum.TryParse<RequestStatus>(status, out var statusEnum))
+                    {
+                        query = query.Where(r => r.Status == statusEnum);
+                    }
+                }
+
+                // Get total count before pagination
+                var totalCount = await query.CountAsync();
+                var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                // Get overall stats (all requests, not just filtered)
+                var allRequests = await _context.LaundryRequests.ToListAsync();
+                var stats = new
+                {
+                    pending = allRequests.Count(r => r.Status == RequestStatus.Pending),
+                    active = allRequests.Count(r => r.Status == RequestStatus.Accepted || r.Status == RequestStatus.InProgress || r.Status == RequestStatus.RobotEnRoute || r.Status == RequestStatus.ArrivedAtRoom || r.Status == RequestStatus.LaundryLoaded),
+                    completed = allRequests.Count(r => r.Status == RequestStatus.Completed),
+                    declined = allRequests.Count(r => r.Status == RequestStatus.Declined || r.Status == RequestStatus.Cancelled)
+                };
+
+                // Apply pagination
+                var requests = await query
                     .OrderByDescending(r => r.RequestedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
                     .Select(r => new
                     {
                         id = r.Id,
@@ -665,7 +693,15 @@ namespace AdministratorWeb.Controllers
                     })
                     .ToListAsync();
 
-                return Ok(new { requests });
+                return Ok(new
+                {
+                    requests,
+                    stats,
+                    totalCount,
+                    totalPages,
+                    currentPage = page,
+                    pageSize
+                });
             }
             catch (Exception ex)
             {
