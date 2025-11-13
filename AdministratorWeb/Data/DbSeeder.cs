@@ -144,7 +144,8 @@ namespace AdministratorWeb.Data
                     CompanyPhone = "+1-555-LAUNDRY",
                     OperatingHours = "8:00 AM - 6:00 PM",
                     MaxWeightPerRequest = 50.0m,
-                    MinWeightPerRequest = 1.0m
+                    MinWeightPerRequest = 1.0m,
+                    MaxRequestsPerDay = 10
                 };
 
                 _context.LaundrySettings.Add(settings);

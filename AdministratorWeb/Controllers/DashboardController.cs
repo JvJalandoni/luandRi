@@ -188,6 +188,7 @@ namespace AdministratorWeb.Controllers
                     settings.LineFollowColorG = model.LineFollowColorG;
                     settings.LineFollowColorB = model.LineFollowColorB;
                     settings.RoomArrivalTimeoutMinutes = model.RoomArrivalTimeoutMinutes;
+                    settings.MaxRequestsPerDay = model.MaxRequestsPerDay;
                     settings.UpdatedAt = DateTime.UtcNow;
                 }
 

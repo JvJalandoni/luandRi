@@ -111,6 +111,11 @@ namespace AdministratorWeb.Models
         [Range(1, 60, ErrorMessage = "Timeout must be between 1 and 60 minutes")]
         public int RoomArrivalTimeoutMinutes { get; set; } = 5;
 
+        /// <summary>Maximum number of requests a user can make per calendar day (null = unlimited, default 10)</summary>
+        [Display(Name = "Max Requests Per User Per Day")]
+        [Range(1, 100, ErrorMessage = "Must be between 1 and 100 requests per day")]
+        public int? MaxRequestsPerDay { get; set; } = 10;
+
         /// <summary>Last time these settings were updated</summary>
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }

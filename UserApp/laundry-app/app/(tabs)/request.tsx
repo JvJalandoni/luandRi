@@ -60,9 +60,18 @@ export default function RequestScreen() {
     } catch (error: any) {
       console.error('Request creation error:', error);
       const errorMessage = error.response?.data?.message || 'Failed to submit request';
-      
+      const errorData = error.response?.data;
+
+      // Check if error is about daily limit reached
+      if (error.response?.status === 400 && errorData?.limitReached) {
+        showAlert(
+          'Daily Limit Reached',
+          `You have reached your daily limit of ${errorData.maxRequests} request(s). Please try again tomorrow at midnight.`,
+          [{ text: 'OK' }]
+        );
+      }
       // Check if error is about existing active request
-      if (error.response?.status === 400 && errorMessage.includes('already have an active request')) {
+      else if (error.response?.status === 400 && errorMessage.includes('already have an active request')) {
         showAlert('Active Request Found', 'You already have an active request in progress.', [
           { text: 'View Request', onPress: () => router.replace('/active-request') },
           { text: 'Cancel', style: 'cancel' }
