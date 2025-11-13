@@ -384,16 +384,6 @@
             Print Receipt
         </a>
 
-        @if (!Model.SentToCustomer)
-        {
-            <form asp-action="ResendReceipt" asp-route-receiptId="@Model.Id"
-                  method="post" style="display: inline;">
-                <button type="submit" class="btn">
-                    Send to Customer
-                </button>
-            </form>
-        }
-
         <a href="@Url.Action("Payments")" class="btn btn-secondary">
             Back to Payments
         </a>
