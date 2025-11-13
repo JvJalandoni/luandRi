@@ -130,11 +130,13 @@
             text-align: left;
             font-weight: bold;
             border-bottom: 2px solid #dee2e6;
+            color: #333;
         }
 
         .items-table td {
             padding: 12px;
             border-bottom: 1px solid #f0f0f0;
+            color: #333;
         }
 
         .items-table tr:last-child td {
@@ -224,10 +226,24 @@
     <div class="receipt-container">
         <!-- Header -->
         <div class="header">
-            <div class="business-name">@(settings?.CompanyName ?? "Autonomous Laundry Service")</div>
+            <div class="business-name">@(settings?.CompanyName ?? "Laundry Service")</div>
             <div class="business-info">
-                @(settings?.CompanyAddress ?? "")<br>
-                Phone: @(settings?.CompanyPhone ?? "") | Email: @(settings?.CompanyEmail ?? "")
+                @if (!string.IsNullOrEmpty(settings?.CompanyAddress))
+                {
+                    @settings.CompanyAddress<br>
+                }
+                @if (!string.IsNullOrEmpty(settings?.CompanyPhone))
+                {
+                    <text>Phone: @settings.CompanyPhone</text>
+                }
+                @if (!string.IsNullOrEmpty(settings?.CompanyEmail))
+                {
+                    @if (!string.IsNullOrEmpty(settings?.CompanyPhone))
+                    {
+                        <text> | </text>
+                    }
+                    <text>Email: @settings.CompanyEmail</text>
+                }
             </div>
         </div>
 
