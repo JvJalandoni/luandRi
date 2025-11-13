@@ -15,13 +15,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Message, getMessages, sendMessage, markMessagesAsRead, getUnreadCount } from '../../services/messageService';
-import { Admin, getAdmins } from '../../services/userService';
 
 /**
  * Support Screen - Customer service messaging with admin staff
  * Features:
- * - Two-view interface: admin list and chat view
- * - Select admin from list to start conversation
+ * - Direct chat interface with customer support team
  * - Real-time messaging with text and image support
  * - Auto-poll for new messages every 5 seconds
  * - Unread message count badges
@@ -32,9 +30,6 @@ import { Admin, getAdmins } from '../../services/userService';
  * @returns React component for customer support chat interface
  */
 export default function SupportScreen() {
-  const [view, setView] = useState<'adminList' | 'chat'>('adminList');
-  const [admins, setAdmins] = useState<Admin[]>([]);
-  const [selectedAdmin, setSelectedAdmin] = useState<Admin | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -45,55 +40,21 @@ export default function SupportScreen() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (view === 'adminList') {
-      loadAdmins();
-    }
-  }, [view]);
-
-  useEffect(() => {
-    if (view === 'chat') {
-      loadMessages();
-      loadUnreadCount();
+    loadMessages();
+    loadUnreadCount();
 
     // Poll for new messages every 5 seconds
     pollIntervalRef.current = setInterval(() => {
       pollNewMessages();
     }, 5000);
 
-      return () => {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-        }
-      };
-    }
-  }, [view]);
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
 
-  const loadAdmins = async () => {
-    try {
-      setLoading(true);
-      const data = await getAdmins();
-      setAdmins(data);
-    } catch (error: any) {
-      console.error('Error loading admins:', error);
-      const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
-      Alert.alert('Error', `Failed to load administrators: ${errorMsg}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAdminSelect = (admin: Admin) => {
-    setSelectedAdmin(admin);
-    setView('chat');
-  };
-
-  const handleBackToList = () => {
-    setView('adminList');
-    setMessages([]);
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-    }
-  };
 
   const loadMessages = async () => {
     try {
@@ -272,66 +233,15 @@ export default function SupportScreen() {
     );
   };
 
-  const renderAdmin = ({ item }: { item: Admin }) => (
-    <TouchableOpacity
-      style={styles.adminCard}
-      onPress={() => handleAdminSelect(item)}
-    >
-      <View style={styles.adminAvatar}>
-        <Text style={styles.adminInitial}>
-          {item.firstName.charAt(0).toUpperCase()}
-        </Text>
-      </View>
-      <View style={styles.adminInfo}>
-        <Text style={styles.adminName}>{item.fullName}</Text>
-        {item.email && (
-          <Text style={styles.adminEmail}>{item.email}</Text>
-        )}
-      </View>
-      <Ionicons name="chevron-forward" size={24} color="#999" />
-    </TouchableOpacity>
-  );
-
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <ActivityIndicator size="large" color="#6366F1" />
+        <Text style={styles.loadingText}>Loading messages...</Text>
       </View>
     );
   }
 
-  // Admin List View
-  if (view === 'adminList') {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerIconContainer}>
-            <Ionicons name="chatbubbles" size={28} color="#6366F1" />
-          </View>
-          <Text style={styles.headerTitle}>Contact Support</Text>
-        </View>
-
-        <FlatList
-          data={admins}
-          renderItem={renderAdmin}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.adminList}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconContainer}>
-                <Ionicons name="person-outline" size={64} color="#475569" />
-              </View>
-              <Text style={styles.emptyText}>No administrators available</Text>
-              <Text style={styles.emptySubtext}>Please check back later to contact support</Text>
-            </View>
-          }
-        />
-      </View>
-    );
-  }
-
-  // Chat View
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -339,16 +249,14 @@ export default function SupportScreen() {
       keyboardVerticalOffset={90}
     >
       <View style={styles.chatHeader}>
-        <TouchableOpacity onPress={handleBackToList} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerIconContainer}>
+          <Ionicons name="chatbubbles" size={28} color="#FFFFFF" />
+        </View>
         <View style={styles.chatHeaderInfo}>
-          <Text style={styles.chatHeaderTitle}>
-            {selectedAdmin?.fullName || 'Support'}
-          </Text>
+          <Text style={styles.chatHeaderTitle}>Customer Support</Text>
           <View style={styles.statusIndicator}>
             <View style={styles.statusDot} />
-            <Text style={styles.statusText}>Active</Text>
+            <Text style={styles.statusText}>Online</Text>
           </View>
         </View>
         {unreadCount > 0 && (
@@ -429,32 +337,14 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 16,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#1E293B',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
-  },
   headerIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#312E81',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 4,
-  },
-  emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#1E293B',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
+    marginRight: 12,
   },
   chatHeader: {
     flexDirection: 'row',
@@ -495,72 +385,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#E0E7FF',
     fontWeight: '500',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  adminList: {
-    padding: 20,
-    paddingTop: 24,
-  },
-  adminCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 18,
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  adminAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#6366F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  adminInitial: {
-    color: 'white',
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  adminInfo: {
-    flex: 1,
-  },
-  adminName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#F1F5F9',
-    marginBottom: 6,
-  },
-  adminEmail: {
-    fontSize: 14,
-    color: '#94A3B8',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginLeft: 12,
-    flex: 1,
   },
   unreadBadge: {
     backgroundColor: '#FF3B30',
