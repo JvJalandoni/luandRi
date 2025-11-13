@@ -489,10 +489,10 @@
             const robotCamera = document.getElementById('robotCamera');
             if (robotCamera) {
                 const robotName = '@ViewData["RobotName"]';
-                if (robotName) {
+                if (robotName && robotName.trim() !== '') {
                     setInterval(() => {
                         const timestamp = new Date().getTime();
-                        robotCamera.src = `/Robots/GetRobotImage?name=${robotName}&t=${timestamp}`;
+                        robotCamera.src = `/Robots/GetRobotImage?name=${encodeURIComponent(robotName)}&t=${timestamp}`;
                     }, 500); // Refresh every 500ms for ~2 FPS
                 }
             }
