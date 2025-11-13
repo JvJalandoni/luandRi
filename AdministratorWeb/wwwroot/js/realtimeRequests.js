@@ -9,8 +9,12 @@ class RealtimeRequestsManager {
         this.currentPage = 1;
         this.pageSize = 10;
         this.selectedStatus = 'All';
+        this.selectedCustomer = '';
+        this.selectedDateFrom = '';
+        this.selectedDateTo = '';
         this.totalPages = 1;
         this.totalCount = 0;
+        this.customerSearchTimeout = null;
         this.init();
     }
 
@@ -75,6 +79,20 @@ class RealtimeRequestsManager {
                 page: this.currentPage,
                 pageSize: this.pageSize
             });
+
+            // Add customer filter if set
+            if (this.selectedCustomer) {
+                params.append('customer', this.selectedCustomer);
+            }
+
+            // Add date filters if set
+            if (this.selectedDateFrom) {
+                params.append('dateFrom', this.selectedDateFrom);
+            }
+            if (this.selectedDateTo) {
+                params.append('dateTo', this.selectedDateTo);
+            }
+
             const response = await fetch(`/api/requests-data?${params}`);
             if (response.ok) {
                 const data = await response.json();
@@ -447,12 +465,72 @@ class RealtimeRequestsManager {
             this.startAutoRefresh();
         });
 
-        // Filter change event
+        // Status filter change event
         const statusFilter = document.getElementById('status-filter');
         if (statusFilter) {
             statusFilter.addEventListener('change', (e) => {
                 this.selectedStatus = e.target.value;
                 this.currentPage = 1; // Reset to first page
+                this.refreshRequests();
+            });
+        }
+
+        // Customer filter with debounce
+        const customerFilter = document.getElementById('customer-filter');
+        if (customerFilter) {
+            customerFilter.addEventListener('input', (e) => {
+                // Clear existing timeout
+                if (this.customerSearchTimeout) {
+                    clearTimeout(this.customerSearchTimeout);
+                }
+
+                // Set new timeout for debounced search
+                this.customerSearchTimeout = setTimeout(() => {
+                    this.selectedCustomer = e.target.value.trim();
+                    this.currentPage = 1; // Reset to first page
+                    this.refreshRequests();
+                }, 500); // Wait 500ms after user stops typing
+            });
+        }
+
+        // Date from filter
+        const dateFromFilter = document.getElementById('date-from-filter');
+        if (dateFromFilter) {
+            dateFromFilter.addEventListener('change', (e) => {
+                this.selectedDateFrom = e.target.value;
+                this.currentPage = 1; // Reset to first page
+                this.refreshRequests();
+            });
+        }
+
+        // Date to filter
+        const dateToFilter = document.getElementById('date-to-filter');
+        if (dateToFilter) {
+            dateToFilter.addEventListener('change', (e) => {
+                this.selectedDateTo = e.target.value;
+                this.currentPage = 1; // Reset to first page
+                this.refreshRequests();
+            });
+        }
+
+        // Clear filters button
+        const clearFiltersButton = document.getElementById('clear-filters');
+        if (clearFiltersButton) {
+            clearFiltersButton.addEventListener('click', () => {
+                // Reset all filters
+                this.selectedStatus = 'All';
+                this.selectedCustomer = '';
+                this.selectedDateFrom = '';
+                this.selectedDateTo = '';
+                this.currentPage = 1;
+
+                // Reset UI inputs
+                if (statusFilter) statusFilter.value = 'All';
+                if (customerFilter) customerFilter.value = '';
+                if (dateFromFilter) dateFromFilter.value = '';
+                if (dateToFilter) dateToFilter.value = '';
+
+                // Refresh data
                 this.refreshRequests();
             });
         }
