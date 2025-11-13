@@ -14,13 +14,15 @@ namespace AdministratorWeb.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger<RequestsController> _logger;
         private readonly IRobotManagementService _robotService;
+        private readonly IAuditService _auditService;
 
         public RequestsController(ApplicationDbContext context, ILogger<RequestsController> logger,
-            IRobotManagementService robotService)
+            IRobotManagementService robotService, IAuditService auditService)
         {
             _context = context;
             _logger = logger;
             _robotService = robotService;
+            _auditService = auditService;
         }
 
         public async Task<IActionResult> Index()
@@ -114,6 +116,24 @@ namespace AdministratorWeb.Controllers
                     "Request {RequestId} accepted, robot {RobotName} dispatched to beacon {BeaconMac}",
                     requestId, assignedRobot.Name, request.AssignedBeaconMacAddress);
 
+                // Log to audit trail
+                await _auditService.LogAsync(
+                    AuditActionType.RequestAccepted,
+                    $"Request #{requestId} accepted and assigned to robot {assignedRobot.Name}",
+                    "LaundryRequest",
+                    requestId.ToString(),
+                    $"Request #{requestId} - {user?.RoomName}",
+                    oldValues: new { Status = "Pending" },
+                    newValues: new
+                    {
+                        Status = "Accepted",
+                        AssignedRobotName = assignedRobot.Name,
+                        HandledById = request.HandledById,
+                        AcceptedAt = request.AcceptedAt,
+                        TotalCost = request.TotalCost
+                    }
+                );
+
                 TempData["Success"] =
                     $"Request #{requestId} accepted, robot {assignedRobot.Name} dispatched to {user?.RoomName}. Cost: ${request.TotalCost:F2}";
             }
@@ -121,6 +141,17 @@ namespace AdministratorWeb.Controllers
             {
                 _logger.LogError(ex, "Error accepting request {RequestId}", requestId);
                 TempData["Error"] = "An error occurred while processing the request.";
+
+                // Log failed action
+                await _auditService.LogAsync(
+                    AuditActionType.RequestAccepted,
+                    $"Failed to accept request #{requestId}",
+                    "LaundryRequest",
+                    requestId.ToString(),
+                    $"Request #{requestId}",
+                    isSuccess: false,
+                    errorMessage: ex.Message
+                );
             }
 
             return RedirectToAction(nameof(Index));
@@ -148,12 +179,40 @@ namespace AdministratorWeb.Controllers
                 _logger.LogInformation("Request {RequestId} declined by user {UserId} with reason: {Reason}",
                     requestId, User.Identity?.Name, reason);
 
+                // Log to audit trail
+                await _auditService.LogAsync(
+                    AuditActionType.RequestDeclined,
+                    $"Request #{requestId} declined: {reason}",
+                    "LaundryRequest",
+                    requestId.ToString(),
+                    $"Request #{requestId}",
+                    oldValues: new { Status = request.Status.ToString() },
+                    newValues: new
+                    {
+                        Status = "Declined",
+                        DeclineReason = reason,
+                        HandledById = request.HandledById,
+                        ProcessedAt = request.ProcessedAt
+                    }
+                );
+
                 TempData["Success"] = $"Request #{requestId} declined.";
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error declining request {RequestId}", requestId);
                 TempData["Error"] = "An error occurred while processing the request.";
+
+                // Log failed action
+                await _auditService.LogAsync(
+                    AuditActionType.RequestDeclined,
+                    $"Failed to decline request #{requestId}",
+                    "LaundryRequest",
+                    requestId.ToString(),
+                    $"Request #{requestId}",
+                    isSuccess: false,
+                    errorMessage: ex.Message
+                );
             }
 
             return RedirectToAction(nameof(Index));
@@ -214,12 +273,38 @@ namespace AdministratorWeb.Controllers
                 _logger.LogInformation("Request {RequestId} completed by user {UserId}",
                     requestId, User.Identity?.Name);
 
+                // Log to audit trail
+                await _auditService.LogAsync(
+                    AuditActionType.RequestCompleted,
+                    $"Request #{requestId} marked as completed",
+                    "LaundryRequest",
+                    requestId.ToString(),
+                    $"Request #{requestId}",
+                    newValues: new
+                    {
+                        Status = "Completed",
+                        CompletedAt = request.CompletedAt,
+                        PendingPaymentCreated = request.TotalCost.HasValue && request.TotalCost.Value > 0
+                    }
+                );
+
                 TempData["Success"] = $"Request #{requestId} marked as completed and pending payment created.";
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error completing request {RequestId}", requestId);
                 TempData["Error"] = "An error occurred while processing the request.";
+
+                // Log failed action
+                await _auditService.LogAsync(
+                    AuditActionType.RequestCompleted,
+                    $"Failed to complete request #{requestId}",
+                    "LaundryRequest",
+                    requestId.ToString(),
+                    $"Request #{requestId}",
+                    isSuccess: false,
+                    errorMessage: ex.Message
+                );
             }
 
             return RedirectToAction(nameof(Index));

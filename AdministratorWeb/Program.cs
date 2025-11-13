@@ -100,6 +100,12 @@ builder.Services.AddSingleton<IRobotManagementService, RobotManagementService>()
 builder.Services.AddHostedService<RequestTimeoutService>();
 // builder.Services.AddHostedService<OrphanedRequestCleanupService>();
 
+// Add HTTP context accessor for audit logging
+builder.Services.AddHttpContextAccessor();
+
+// Register audit service
+builder.Services.AddScoped<IAuditService, AuditService>();
+
 // Configure lowercase URLs
 builder.Services.AddRouting(options =>
 {

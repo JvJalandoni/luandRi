@@ -20,6 +20,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Room> Rooms { get; set; }
     public DbSet<RobotState> RobotStates { get; set; }
     public DbSet<Message> Messages { get; set; }
+    public DbSet<AuditLog> AuditLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -191,6 +192,39 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             // Composite index for customer conversations
             entity.HasIndex(e => new { e.CustomerId, e.SentAt });
+        });
+
+        builder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.UserName).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.UserEmail).HasMaxLength(256);
+            entity.Property(e => e.ActionDescription).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.EntityType).HasMaxLength(100);
+            entity.Property(e => e.EntityId).HasMaxLength(50);
+            entity.Property(e => e.EntityName).HasMaxLength(200);
+            entity.Property(e => e.IpAddress).HasMaxLength(45);  // IPv6 compatible
+            entity.Property(e => e.UserAgent).HasMaxLength(500);
+            entity.Property(e => e.SessionId).HasMaxLength(100);
+            entity.Property(e => e.RequestPath).HasMaxLength(500);
+            entity.Property(e => e.HttpMethod).HasMaxLength(10);
+            entity.Property(e => e.ChangedFields).HasMaxLength(500);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+
+            // Indexes for performance
+            entity.HasIndex(e => e.Timestamp).IsDescending();
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.ActionType);
+            entity.HasIndex(e => new { e.EntityType, e.EntityId });
+            entity.HasIndex(e => e.IsSuccess);
+            entity.HasIndex(e => new { e.Timestamp, e.ActionType });
+
+            // Foreign key relationship to User
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Restrict);  // Don't delete audit logs when user is deleted
         });
 
     }

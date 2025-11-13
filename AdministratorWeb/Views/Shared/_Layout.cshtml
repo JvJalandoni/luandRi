@@ -138,6 +138,10 @@
                                         <i data-lucide="radio" class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Beacon" ? "text-white" : "text-slate-400") mr-3 h-5 w-5"></i>
                                         Beacons
                                     </a>
+                                    <a asp-controller="AuditLogs" asp-action="Index" class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "AuditLogs" ? "bg-brand-600 text-white shadow-lg" : "text-slate-300 hover:bg-slate-700/50 hover:text-white") group flex items-center px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-200">
+                                        <i data-lucide="shield-check" class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "AuditLogs" ? "text-white" : "text-slate-400") mr-3 h-5 w-5"></i>
+                                        Audit Logs
+                                    </a>
                                 </div>
                             </div>
                         </nav>
