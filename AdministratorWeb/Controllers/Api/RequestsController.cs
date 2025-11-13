@@ -70,10 +70,29 @@ namespace AdministratorWeb.Controllers.Api
                 return Unauthorized("Customer ID not found in token");
             }
 
+            // Check daily request limit (anti-troll protection)
+            var laundrySettings = await _context.LaundrySettings.FirstOrDefaultAsync();
+            if (laundrySettings?.MaxRequestsPerDay.HasValue == true)
+            {
+                var today = DateTime.Today;
+                var requestCountToday = await _context.LaundryRequests
+                    .CountAsync(r => r.CustomerId == customerId && r.RequestedAt.Date == today);
+
+                if (requestCountToday >= laundrySettings.MaxRequestsPerDay.Value)
+                {
+                    return BadRequest(new {
+                        message = $"You have reached your daily limit of {laundrySettings.MaxRequestsPerDay.Value} request(s). Please try again tomorrow.",
+                        limitReached = true,
+                        maxRequests = laundrySettings.MaxRequestsPerDay.Value,
+                        currentCount = requestCountToday
+                    });
+                }
+            }
+
             // Check if user has an active request
             var activeRequest = await _context.LaundryRequests
-                .FirstOrDefaultAsync(r => r.CustomerId == customerId && 
-                    (r.Status == RequestStatus.Pending || r.Status == RequestStatus.Accepted || 
+                .FirstOrDefaultAsync(r => r.CustomerId == customerId &&
+                    (r.Status == RequestStatus.Pending || r.Status == RequestStatus.Accepted ||
                      r.Status == RequestStatus.InProgress || r.Status == RequestStatus.RobotEnRoute ||
                      r.Status == RequestStatus.ArrivedAtRoom));
 
