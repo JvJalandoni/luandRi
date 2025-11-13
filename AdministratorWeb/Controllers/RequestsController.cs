@@ -640,7 +640,13 @@ namespace AdministratorWeb.Controllers
         }
 
         [HttpGet("/api/requests-data")]
-        public async Task<IActionResult> GetRequestsData([FromQuery] string? status = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetRequestsData(
+            [FromQuery] string? status = null,
+            [FromQuery] string? customer = null,
+            [FromQuery] DateTime? dateFrom = null,
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
         {
             try
             {
@@ -653,6 +659,24 @@ namespace AdministratorWeb.Controllers
                     {
                         query = query.Where(r => r.Status == statusEnum);
                     }
+                }
+
+                // Apply customer name filter
+                if (!string.IsNullOrEmpty(customer))
+                {
+                    query = query.Where(r => r.CustomerName.Contains(customer) ||
+                                            r.CustomerPhone.Contains(customer) ||
+                                            r.CustomerId.Contains(customer));
+                }
+
+                // Apply date range filter
+                if (dateFrom.HasValue)
+                {
+                    query = query.Where(r => r.RequestedAt.Date >= dateFrom.Value.Date);
+                }
+                if (dateTo.HasValue)
+                {
+                    query = query.Where(r => r.RequestedAt.Date <= dateTo.Value.Date);
                 }
 
                 // Get total count before pagination
