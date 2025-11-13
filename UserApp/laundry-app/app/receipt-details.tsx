@@ -14,11 +14,20 @@ import { ThemedView } from '../components/ThemedView';
 import { ThemedText } from '../components/ThemedText';
 import { useCustomAlert } from '../components/CustomAlert';
 import { ArrowLeft, FileText } from 'lucide-react-native';
+import { authService } from '../services/authService';
+
+interface CompanySettings {
+  companyName: string;
+  companyAddress: string;
+  companyPhone: string;
+  companyEmail: string;
+}
 
 export default function ReceiptDetailsScreen() {
   const { requestId } = useLocalSearchParams<{ requestId: string }>();
   const router = useRouter();
   const [request, setRequest] = useState<LaundryRequestResponse | null>(null);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { showAlert, AlertComponent } = useCustomAlert();
 
@@ -35,8 +44,15 @@ export default function ReceiptDetailsScreen() {
   const loadReceiptData = async () => {
     try {
       setIsLoading(true);
-      const requestData = await laundryService.getRequestStatus(Number(requestId));
+
+      // Load request data and company settings in parallel
+      const [requestData, settingsResponse] = await Promise.all([
+        laundryService.getRequestStatus(Number(requestId)),
+        fetch(`${authService.getBaseUrl()}/api/settings`).then(res => res.json())
+      ]);
+
       setRequest(requestData);
+      setCompanySettings(settingsResponse);
     } catch (error: any) {
       console.error('Error loading receipt:', error);
       showAlert('Error', 'Failed to load receipt');
@@ -129,7 +145,18 @@ export default function ReceiptDetailsScreen() {
 
           {/* Company/Service Info */}
           <View style={styles.section}>
-            <Text style={[styles.companyName, { color: '#000000' }]}>LAUNDRY SERVICE</Text>
+            <Text style={[styles.companyName, { color: '#000000' }]}>
+              {companySettings?.companyName?.toUpperCase() || 'LAUNDRY SERVICE'}
+            </Text>
+            {companySettings?.companyAddress && (
+              <Text style={[styles.companyInfo, { color: '#6b7280' }]}>{companySettings.companyAddress}</Text>
+            )}
+            {companySettings?.companyPhone && (
+              <Text style={[styles.companyInfo, { color: '#6b7280' }]}>Phone: {companySettings.companyPhone}</Text>
+            )}
+            {companySettings?.companyEmail && (
+              <Text style={[styles.companyInfo, { color: '#6b7280' }]}>Email: {companySettings.companyEmail}</Text>
+            )}
             <Text style={[styles.companySubtext, { color: '#6b7280' }]}>Official Payment Receipt</Text>
           </View>
 
@@ -317,9 +344,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
+  companyInfo: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
   companySubtext: {
     fontSize: 12,
     textAlign: 'center',
+    marginTop: 8,
   },
   divider: {
     height: 1,
