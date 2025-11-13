@@ -6,6 +6,11 @@ class RealtimeRequestsManager {
         this.lastRequestsData = null;
         this.timerDurationSeconds = 300; // Default 5 minutes
         this.timerInterval = null;
+        this.currentPage = 1;
+        this.pageSize = 10;
+        this.selectedStatus = 'All';
+        this.totalPages = 1;
+        this.totalCount = 0;
         this.init();
     }
 
@@ -65,12 +70,20 @@ class RealtimeRequestsManager {
 
         this.isRefreshing = true;
         try {
-            const response = await fetch('/api/requests-data');
+            const params = new URLSearchParams({
+                status: this.selectedStatus,
+                page: this.currentPage,
+                pageSize: this.pageSize
+            });
+            const response = await fetch(`/api/requests-data?${params}`);
             if (response.ok) {
                 const data = await response.json();
                 this.lastRequestsData = data;
+                this.totalPages = data.totalPages;
+                this.totalCount = data.totalCount;
                 this.updateRequestsDisplay(data);
                 this.updateStatsCards(data);
+                this.updatePaginationControls();
                 this.lastUpdateTime = new Date();
             }
         } catch (error) {
@@ -81,15 +94,13 @@ class RealtimeRequestsManager {
     }
 
     updateStatsCards(data) {
-        const pending = data.requests.filter(r => r.status === 'Pending').length;
-        const active = data.requests.filter(r => r.status === 'Accepted' || r.status === 'InProgress').length;
-        const completed = data.requests.filter(r => r.status === 'Completed').length;
-        const declined = data.requests.filter(r => r.status === 'Declined').length;
-
-        document.querySelectorAll('[data-stat="pending"]').forEach(el => el.textContent = pending);
-        document.querySelectorAll('[data-stat="active"]').forEach(el => el.textContent = active);
-        document.querySelectorAll('[data-stat="completed"]').forEach(el => el.textContent = completed);
-        document.querySelectorAll('[data-stat="declined"]').forEach(el => el.textContent = declined);
+        // Use stats from API which shows totals for ALL requests
+        if (data.stats) {
+            document.querySelectorAll('[data-stat="pending"]').forEach(el => el.textContent = data.stats.pending);
+            document.querySelectorAll('[data-stat="active"]').forEach(el => el.textContent = data.stats.active);
+            document.querySelectorAll('[data-stat="completed"]').forEach(el => el.textContent = data.stats.completed);
+            document.querySelectorAll('[data-stat="declined"]').forEach(el => el.textContent = data.stats.declined);
+        }
     }
 
     updateRequestsDisplay(data) {
@@ -435,6 +446,101 @@ class RealtimeRequestsManager {
         window.addEventListener('modalClosed', () => {
             this.startAutoRefresh();
         });
+
+        // Filter change event
+        const statusFilter = document.getElementById('status-filter');
+        if (statusFilter) {
+            statusFilter.addEventListener('change', (e) => {
+                this.selectedStatus = e.target.value;
+                this.currentPage = 1; // Reset to first page
+                this.refreshRequests();
+            });
+        }
+
+        // Pagination events
+        const prevButton = document.getElementById('prev-page');
+        const nextButton = document.getElementById('next-page');
+
+        if (prevButton) {
+            prevButton.addEventListener('click', () => {
+                if (this.currentPage > 1) {
+                    this.currentPage--;
+                    this.refreshRequests();
+                }
+            });
+        }
+
+        if (nextButton) {
+            nextButton.addEventListener('click', () => {
+                if (this.currentPage < this.totalPages) {
+                    this.currentPage++;
+                    this.refreshRequests();
+                }
+            });
+        }
+    }
+
+    updatePaginationControls() {
+        const paginationContainer = document.getElementById('pagination-container');
+        const paginationInfo = document.getElementById('pagination-info');
+        const pageNumbers = document.getElementById('page-numbers');
+        const prevButton = document.getElementById('prev-page');
+        const nextButton = document.getElementById('next-page');
+        const countInfo = document.getElementById('requests-count-info');
+
+        if (!paginationContainer) return;
+
+        // Show/hide pagination
+        if (this.totalPages > 1) {
+            paginationContainer.classList.remove('hidden');
+        } else {
+            paginationContainer.classList.add('hidden');
+        }
+
+        // Update info text
+        const start = (this.currentPage - 1) * this.pageSize + 1;
+        const end = Math.min(this.currentPage * this.pageSize, this.totalCount);
+        if (paginationInfo) {
+            paginationInfo.textContent = `Showing ${start}-${end} of ${this.totalCount} requests`;
+        }
+        if (countInfo) {
+            countInfo.textContent = `${this.totalCount} total requests`;
+        }
+
+        // Update page numbers
+        if (pageNumbers) {
+            pageNumbers.innerHTML = '';
+            const maxButtons = 5;
+            let startPage = Math.max(1, this.currentPage - Math.floor(maxButtons / 2));
+            let endPage = Math.min(this.totalPages, startPage + maxButtons - 1);
+
+            if (endPage - startPage < maxButtons - 1) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const button = document.createElement('button');
+                button.textContent = i;
+                button.className = i === this.currentPage
+                    ? 'px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg'
+                    : 'px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 text-white text-sm font-medium rounded-lg transition-all duration-200';
+
+                button.addEventListener('click', () => {
+                    this.currentPage = i;
+                    this.refreshRequests();
+                });
+
+                pageNumbers.appendChild(button);
+            }
+        }
+
+        // Update button states
+        if (prevButton) {
+            prevButton.disabled = this.currentPage === 1;
+        }
+        if (nextButton) {
+            nextButton.disabled = this.currentPage === this.totalPages;
+        }
     }
 
     destroy() {

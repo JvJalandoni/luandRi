@@ -136,14 +136,23 @@
                 <h3 class="text-xl font-bold text-white">All Requests</h3>
                 <p class="mt-1 text-sm text-slate-400 flex items-center">
                     <i data-lucide="list" class="w-4 h-4 mr-2"></i>
-                    Manage customer laundry requests
+                    <span id="requests-count-info">Loading...</span>
                 </p>
             </div>
-            <button
-                class="inline-flex items-center px-3 py-2 bg-slate-700/50 hover:bg-slate-600/50 text-white text-sm font-medium rounded-lg transition-all duration-200 whitespace-nowrap">
-                <i data-lucide="filter" class="w-4 h-4 mr-2 flex-shrink-0"></i>
-                <span>Filter</span>
-            </button>
+            <div class="flex items-center gap-3">
+                <select id="status-filter" class="px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 text-white text-sm font-medium rounded-lg border border-slate-600/50 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-transparent transition-all duration-200">
+                    <option value="All">All Statuses</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Accepted">Accepted</option>
+                    <option value="RobotEnRoute">Robot En Route</option>
+                    <option value="ArrivedAtRoom">Arrived at Room</option>
+                    <option value="LaundryLoaded">Laundry Loaded</option>
+                    <option value="InProgress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Declined">Declined</option>
+                </select>
+            </div>
         </div>
     </div>
     <div id="requests-container" class="divide-y divide-slate-700/30">
@@ -154,6 +163,26 @@
             </div>
             <h3 class="text-xl font-medium text-white mb-3">Loading Requests...</h3>
             <p class="text-slate-400">Real-time requests data is loading</p>
+        </div>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div id="pagination-container" class="px-6 py-4 border-t border-slate-700/50 hidden">
+        <div class="flex items-center justify-between">
+            <div class="text-sm text-slate-400">
+                <span id="pagination-info">Showing 0-0 of 0 requests</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="prev-page" class="px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 text-white text-sm font-medium rounded-lg border border-slate-600/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                </button>
+                <div id="page-numbers" class="flex items-center gap-2">
+                    <!-- Page numbers will be inserted here -->
+                </div>
+                <button id="next-page" class="px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 text-white text-sm font-medium rounded-lg border border-slate-600/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
         </div>
     </div>
 </div>
