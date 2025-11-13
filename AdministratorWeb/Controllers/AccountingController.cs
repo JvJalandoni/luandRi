@@ -124,18 +124,31 @@ namespace AdministratorWeb.Controllers
             return View(recentPayments);
         }
 
-        public async Task<IActionResult> Payments(string? status, string? method, DateTime? from, DateTime? to, string? customerSearch, decimal? minAmount, decimal? maxAmount)
+        public async Task<IActionResult> Payments(string? status, string? method, DateTime? from, DateTime? to, string? customerSearch, decimal? minAmount, decimal? maxAmount, int page = 1, int pageSize = 10)
         {
             var query = _context.Payments
                 .Include(p => p.LaundryRequest)
                 .AsQueryable();
 
-            // Load receipts separately to avoid Include issues
-            var payments = await ApplyPaymentFilters(query, status, method, from, to, customerSearch, minAmount, maxAmount)
-                .OrderByDescending(p => p.CreatedAt)
+            // Apply filters
+            var filteredQuery = ApplyPaymentFilters(query, status, method, from, to, customerSearch, minAmount, maxAmount)
+                .OrderByDescending(p => p.CreatedAt);
+
+            // Get total count for pagination
+            var totalCount = await filteredQuery.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            // Ensure page is within valid range
+            if (page < 1) page = 1;
+            if (page > totalPages && totalPages > 0) page = totalPages;
+
+            // Apply pagination
+            var payments = await filteredQuery
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
-            // Load receipts for all payments
+            // Load receipts for current page payments only
             var paymentIds = payments.Select(p => p.Id).ToList();
             var receipts = await _context.Receipts
                 .Where(r => paymentIds.Contains(r.PaymentId))
@@ -143,6 +156,12 @@ namespace AdministratorWeb.Controllers
 
             // Attach receipts to payments (manual join)
             ViewData["Receipts"] = receipts.ToDictionary(r => r.PaymentId);
+
+            // Pagination data
+            ViewData["CurrentPage"] = page;
+            ViewData["TotalPages"] = totalPages;
+            ViewData["TotalCount"] = totalCount;
+            ViewData["PageSize"] = pageSize;
 
             var filterDto = new PaymentsFilterDto
             {
