@@ -488,7 +488,19 @@ namespace AdministratorWeb.Controllers
 
             await _context.SaveChangesAsync();
 
-            TempData["Success"] = "Payment confirmed successfully.";
+            // Generate receipt for the confirmed payment
+            Receipt? receipt = null;
+            try
+            {
+                receipt = await GenerateReceiptAsync(payment.Id);
+                TempData["Success"] = $"Payment confirmed successfully. Receipt #{receipt.ReceiptNumber} generated.";
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the payment confirmation
+                TempData["Warning"] = $"Payment confirmed successfully, but failed to generate receipt: {ex.Message}";
+            }
+
             return RedirectToAction(nameof(Payments));
         }
 
