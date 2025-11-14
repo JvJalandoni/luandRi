@@ -14,12 +14,14 @@ namespace AdministratorWeb.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly ApplicationDbContext _context;
+        private readonly IWebHostEnvironment _webHostEnvironment;
 
-        public UsersController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext context)
+        public UsersController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext context, IWebHostEnvironment webHostEnvironment)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _context = context;
+            _webHostEnvironment = webHostEnvironment;
         }
 
         public async Task<IActionResult> Index()
@@ -143,7 +145,7 @@ namespace AdministratorWeb.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(string id, string firstName, string lastName, string email, string userName, string phoneNumber, string role, bool isActive, string? assignedBeaconMacAddress = null, string? roomName = null, string? roomDescription = null, string newPassword = "")
+        public async Task<IActionResult> Edit(string id, string firstName, string lastName, string email, string userName, string phoneNumber, string role, bool isActive, IFormFile? profilePicture = null, bool removeProfilePicture = false, string? assignedBeaconMacAddress = null, string? roomName = null, string? roomDescription = null, string newPassword = "")
         {
             var user = await _userManager.FindByIdAsync(id);
             if (user == null)
@@ -176,6 +178,45 @@ namespace AdministratorWeb.Controllers
             user.AssignedBeaconMacAddress = assignedBeaconMacAddress?.ToUpperInvariant();
             user.RoomName = roomName;
             user.RoomDescription = roomDescription;
+
+            // Handle profile picture removal
+            if (removeProfilePicture && !string.IsNullOrEmpty(user.ProfilePicturePath))
+            {
+                var oldProfilePath = Path.Combine(_webHostEnvironment.WebRootPath, user.ProfilePicturePath.TrimStart('/'));
+                if (System.IO.File.Exists(oldProfilePath))
+                {
+                    System.IO.File.Delete(oldProfilePath);
+                }
+                user.ProfilePicturePath = null;
+            }
+
+            // Handle profile picture upload
+            if (profilePicture != null && profilePicture.Length > 0)
+            {
+                // Delete old profile picture if exists
+                if (!string.IsNullOrEmpty(user.ProfilePicturePath))
+                {
+                    var oldProfilePath = Path.Combine(_webHostEnvironment.WebRootPath, user.ProfilePicturePath.TrimStart('/'));
+                    if (System.IO.File.Exists(oldProfilePath))
+                    {
+                        System.IO.File.Delete(oldProfilePath);
+                    }
+                }
+
+                // Save new profile picture
+                var uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "profiles");
+                Directory.CreateDirectory(uploadsFolder);
+
+                var uniqueFileName = $"{user.Id}_{Guid.NewGuid()}{Path.GetExtension(profilePicture.FileName)}";
+                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await profilePicture.CopyToAsync(fileStream);
+                }
+
+                user.ProfilePicturePath = $"/uploads/profiles/{uniqueFileName}";
+            }
 
             // Update the user
             var result = await _userManager.UpdateAsync(user);

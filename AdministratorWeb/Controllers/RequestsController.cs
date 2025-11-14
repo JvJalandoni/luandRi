@@ -714,6 +714,7 @@ namespace AdministratorWeb.Controllers
                     .Select(r => new
                     {
                         id = r.Id,
+                        customerId = r.CustomerId,
                         customerName = r.CustomerName,
                         customerPhone = r.CustomerPhone,
                         address = r.Address,

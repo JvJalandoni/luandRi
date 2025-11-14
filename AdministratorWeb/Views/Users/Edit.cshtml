@@ -12,9 +12,56 @@
 
 <div class="bg-gray-800 shadow overflow-hidden sm:rounded-lg border border-gray-700">
     <div class="px-6 py-8">
-        <form asp-action="Edit" method="post" class="space-y-6">
+        <form asp-action="Edit" method="post" enctype="multipart/form-data" class="space-y-6">
             <input type="hidden" asp-for="Id" />
-            
+
+            <!-- Profile Picture Section -->
+            <div class="bg-gray-700/30 rounded-lg p-6 border border-gray-600">
+                <label class="block text-sm font-medium text-gray-300 mb-4">Profile Picture</label>
+                <div class="flex items-center space-x-6">
+                    <!-- Current/Preview Avatar -->
+                    <div class="flex-shrink-0">
+                        <div id="profilePicturePreview" class="w-24 h-24 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                            @if (!string.IsNullOrEmpty(Model.ProfilePicturePath))
+                            {
+                                <img src="@Model.ProfilePicturePath" alt="Profile" class="w-full h-full object-cover" />
+                            }
+                            else
+                            {
+                                var initials = "";
+                                if (!string.IsNullOrEmpty(Model.FirstName) && !string.IsNullOrEmpty(Model.LastName))
+                                {
+                                    initials = $"{Model.FirstName[0]}{Model.LastName[0]}".ToUpper();
+                                }
+                                <span class="text-white font-semibold text-2xl">@initials</span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Upload/Remove Controls -->
+                    <div class="flex-1">
+                        <input type="file" id="profilePictureInput" name="profilePicture" accept="image/*" class="hidden" />
+                        <input type="hidden" id="removeProfilePicture" name="removeProfilePicture" value="false" />
+
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" onclick="document.getElementById('profilePictureInput').click()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium inline-flex items-center">
+                                <i data-lucide="upload" class="w-4 h-4 mr-2"></i>
+                                Upload New Picture
+                            </button>
+
+                            @if (!string.IsNullOrEmpty(Model.ProfilePicturePath))
+                            {
+                                <button type="button" id="removeButton" onclick="removeProfilePicture()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium inline-flex items-center">
+                                    <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
+                                    Remove Picture
+                                </button>
+                            }
+                        </div>
+                        <p class="text-gray-400 text-xs mt-2">Recommended: Square image, at least 200x200px. Max 5MB.</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label asp-for="FirstName" class="block text-sm font-medium text-gray-300 mb-2"></label>
@@ -126,4 +173,79 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        // Profile picture preview
+        document.getElementById('profilePictureInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                // Check file size (5MB limit)
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('File size must be less than 5MB');
+                    e.target.value = '';
+                    return;
+                }
+
+                // Check file type
+                if (!file.type.startsWith('image/')) {
+                    alert('Please select an image file');
+                    e.target.value = '';
+                    return;
+                }
+
+                // Show preview
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const preview = document.getElementById('profilePicturePreview');
+                    preview.innerHTML = '<img src="' + event.target.result + '" alt="Profile" class="w-full h-full object-cover" />';
+
+                    // Reset remove flag
+                    document.getElementById('removeProfilePicture').value = 'false';
+
+                    // Show remove button if not already visible
+                    const removeBtn = document.getElementById('removeButton');
+                    if (!removeBtn) {
+                        const btnContainer = document.querySelector('.flex.flex-wrap.gap-2');
+                        const newRemoveBtn = document.createElement('button');
+                        newRemoveBtn.type = 'button';
+                        newRemoveBtn.id = 'removeButton';
+                        newRemoveBtn.onclick = removeProfilePicture;
+                        newRemoveBtn.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium inline-flex items-center';
+                        newRemoveBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>Remove Picture';
+                        btnContainer.appendChild(newRemoveBtn);
+                        lucide.createIcons();
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function removeProfilePicture() {
+            if (!confirm('Are you sure you want to remove the profile picture?')) {
+                return;
+            }
+
+            // Clear file input
+            document.getElementById('profilePictureInput').value = '';
+
+            // Set remove flag
+            document.getElementById('removeProfilePicture').value = 'true';
+
+            // Show initials
+            const preview = document.getElementById('profilePicturePreview');
+            const firstName = document.querySelector('input[name="firstName"]').value || '';
+            const lastName = document.querySelector('input[name="lastName"]').value || '';
+            let initials = '?';
+            if (firstName && lastName) {
+                initials = (firstName[0] + lastName[0]).toUpperCase();
+            }
+            preview.innerHTML = '<span class="text-white font-semibold text-2xl">' + initials + '</span>';
+
+            // Hide remove button
+            const removeBtn = document.getElementById('removeButton');
+            if (removeBtn) {
+                removeBtn.remove();
+            }
+        }
+    </script>
 }

@@ -150,9 +150,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-4">
                             <div class="flex-shrink-0">
-                                <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500/20 to-indigo-500/20 flex items-center justify-center group-hover:from-brand-500/30 group-hover:to-indigo-500/30 transition-all duration-200">
-                                    <i data-lucide="user" class="h-5 w-5 text-brand-400"></i>
-                                </div>
+                                @await Component.InvokeAsync("UserAvatar", new { userId = request.CustomerId, userName = request.CustomerName, size = "w-12 h-12", textSize = "text-sm" })
                             </div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center space-x-3">

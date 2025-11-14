@@ -216,9 +216,12 @@
                         Request Details
                     </h4>
                     <div class="space-y-2 text-sm">
-                        <div class="flex justify-between">
+                        <div class="flex justify-between items-center">
                             <span class="text-slate-400">Customer:</span>
-                            <span class="text-white" id="detailCustomerName">--</span>
+                            <div class="flex items-center space-x-2">
+                                <div id="detailCustomerAvatar" class="w-8 h-8"></div>
+                                <span class="text-white" id="detailCustomerName">--</span>
+                            </div>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-slate-400">Room:</span>
@@ -492,6 +495,18 @@
 }
 
 <script>
+    // Helper function to get initials from name
+    function getInitials(name) {
+        if (!name) return '?';
+        const parts = name.trim().split(' ');
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        } else if (parts.length === 1 && parts[0].length >= 2) {
+            return parts[0].substring(0, 2).toUpperCase();
+        }
+        return parts[0][0].toUpperCase();
+    }
+
     async function showAcceptModal(requestId) {
         document.getElementById('acceptRequestId').value = requestId;
         
@@ -500,9 +515,37 @@
             const response = await fetch(`/api/requests/${requestId}/details`);
             if (response.ok) {
                 const data = await response.json();
-                
+
                 // Update the details display
                 document.getElementById('detailCustomerName').textContent = data.customerName || 'N/A';
+
+                // Update customer avatar
+                const avatarContainer = document.getElementById('detailCustomerAvatar');
+                if (data.customerId && data.customerName) {
+                    // Fetch user data to get profile picture
+                    try {
+                        const userResponse = await fetch(`/api/users/${data.customerId}`);
+                        if (userResponse.ok) {
+                            const userData = await userResponse.json();
+                            const initials = getInitials(data.customerName);
+
+                            if (userData.profilePicturePath) {
+                                avatarContainer.innerHTML = `<img src="${userData.profilePicturePath}" alt="Profile" class="w-8 h-8 rounded-full object-cover">`;
+                            } else {
+                                avatarContainer.innerHTML = `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center">
+                                    <span class="text-white font-semibold text-xs">${initials}</span>
+                                </div>`;
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Error fetching user profile:', err);
+                        const initials = getInitials(data.customerName);
+                        avatarContainer.innerHTML = `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center">
+                            <span class="text-white font-semibold text-xs">${initials}</span>
+                        </div>`;
+                    }
+                }
+
                 document.getElementById('detailRoomName').textContent = data.roomName || 'Not assigned';
                 document.getElementById('detailRobotName').textContent = data.assignedRobotName || 'Not assigned';
                 document.getElementById('detailDetectedWeight').textContent = 

@@ -83,43 +83,73 @@ export const userService = {
     return response.data;
   },
 
+  async uploadProfilePicture(imageData: { uri: string; name: string; type: string }): Promise<{ success: boolean; message: string; profilePicturePath?: string }> {
+    console.log('📤 uploadProfilePicture - Uploading ONLY profile picture to /user/profile/picture');
+    const formData = new FormData();
+    const file: any = {
+      uri: imageData.uri,
+      name: imageData.name,
+      type: imageData.type,
+    };
+    formData.append('profilePicture', file);
+
+    const response = await apiPost('/user/profile/picture', formData);
+    if (!response) {
+      throw new Error('Failed to upload profile picture - no response');
+    }
+    return response.data;
+  },
+
   async updateProfile(data: UpdateProfileRequest): Promise<{ success: boolean; message: string; profilePicturePath?: string }> {
-    // Check if we're uploading a profile picture
+    // If profile picture is included, send as FormData (like admin profile)
+    // Otherwise send as JSON for text-only updates
     if (data.profilePicture) {
-      // Use FormData to support file uploads
-      const formData = new FormData();
-      formData.append('FirstName', data.firstName);
-      formData.append('LastName', data.lastName);
-      formData.append('Email', data.email);
-      if (data.phone) {
-        formData.append('Phone', data.phone);
+      console.log('📤 Updating profile WITH picture via PUT /user/profile (FormData - same as messageService)');
+
+      // Get JWT token manually (same as messageService)
+      const token = await AsyncStorage.getItem('jwt_token');
+      if (!token) {
+        throw new Error('Authentication required');
       }
 
-      // Add profile picture
+      const formData = new FormData();
+      formData.append('firstName', data.firstName);
+      formData.append('lastName', data.lastName);
+      formData.append('email', data.email);
+      if (data.phone) {
+        formData.append('phone', data.phone);
+      }
+
+      // Append file same way as messageService does
       const file: any = {
         uri: data.profilePicture.uri,
         name: data.profilePicture.name,
         type: data.profilePicture.type,
       };
-      formData.append('ProfilePicture', file);
+      formData.append('profilePicture', file);
 
-      // For FormData, don't set Content-Type - axios will handle it
-      const response = await apiPut('/user/profile', formData);
+      console.log('📤 Sending FormData to PUT /user/profile with explicit multipart/form-data header');
 
-      if (!response) {
-        throw new Error('Failed to update profile - no response');
-      }
+      // Use axios directly like messageService (bypass apiPut wrapper)
+      const response = await axios.put('http://140.245.51.90:23000/api/user/profile', formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 10000
+      });
+
       return response.data;
     } else {
-      // No profile picture - use JSON
-      const payload = {
-        FirstName: data.firstName,
-        LastName: data.lastName,
-        Email: data.email,
-        Phone: data.phone,
-      };
+      console.log('📤 Updating text fields ONLY via PUT /user/profile (JSON)');
+      // Send as JSON - NO profile picture
+      const response = await apiPut('/user/profile', {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone
+      });
 
-      const response = await apiPut('/user/profile', payload);
       if (!response) {
         throw new Error('Failed to update profile - no response');
       }
