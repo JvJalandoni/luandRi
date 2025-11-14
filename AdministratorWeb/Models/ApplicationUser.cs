@@ -35,6 +35,14 @@ namespace AdministratorWeb.Models
         public bool IsActive { get; set; } = true;
 
         /// <summary>
+        /// Path to user's profile picture (e.g., "/uploads/profiles/userId.jpg")
+        /// Null if no profile picture has been uploaded
+        /// </summary>
+        [Display(Name = "Profile Picture")]
+        [StringLength(500)]
+        public string? ProfilePicturePath { get; set; }
+
+        /// <summary>
         /// MAC address of Bluetooth beacon assigned to customer's room (e.g., "AA:BB:CC:DD:EE:FF")
         /// Used by robot to detect arrival at customer's room during navigation
         /// Only applicable for customer accounts, null for admin accounts

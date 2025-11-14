@@ -2,174 +2,287 @@
 @using AdministratorWeb.Areas.Identity.Pages.Account.Manage
 @model IndexModel
 @{
-    ViewData["Title"] = "Profile Settings";
+    ViewData["Title"] = "Settings";
+    var initials = "";
+    if (!string.IsNullOrEmpty(Model.Input?.FirstName) && !string.IsNullOrEmpty(Model.Input?.LastName))
+    {
+        initials = $"{Model.Input.FirstName[0]}{Model.Input.LastName[0]}".ToUpper();
+    }
+    else
+    {
+        initials = Model.Username?.Length > 0 ? Model.Username.Substring(0, 2).ToUpper() : "AD";
+    }
 }
 
-<div class="mb-8 animate-slide-up">
-    <div class="flex items-center justify-between">
-        <div>
-            <h1 class="text-3xl font-bold text-white mb-2">Profile Settings</h1>
-            <p class="text-slate-400 flex items-center">
-                <i data-lucide="user" class="w-4 h-4 mr-2"></i>
-                Manage your account information and preferences
-            </p>
-        </div>
-    </div>
-</div>
-
-<!-- Navigation -->
-<partial name="_ManageNav" />
-
-<!-- Profile Form -->
-<div class="max-w-4xl mx-auto bg-slate-800/50 backdrop-blur-xl shadow-xl rounded-2xl border border-slate-700/50 animate-slide-up" style="animation-delay: 0.1s;">
-    <div class="px-8 py-8">
-        <!-- Success/Error Messages -->
-        @if (Model.StatusMessage != null)
-        {
-            <div class="mb-6 animate-slide-down">
-                <div class="bg-emerald-900/50 border border-emerald-700/50 text-emerald-200 px-4 py-3 rounded-xl backdrop-blur-sm" role="alert">
-                    <div class="flex items-center">
-                        <i data-lucide="check-circle" class="w-5 h-5 mr-2 text-emerald-400"></i>
-                        <span>@Model.StatusMessage</span>
-                    </div>
-                </div>
+<!-- Compact Sticky Header -->
+<div class="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-md border-b border-slate-700/30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-6">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-brand-500 to-purple-600 border border-slate-600 flex items-center justify-center">
+                @if (!string.IsNullOrEmpty(Model.ProfilePicturePath))
+                {
+                    <img src="@Model.ProfilePicturePath" alt="Profile" class="w-full h-full object-cover">
+                }
+                else
+                {
+                    <span class="text-white text-xs font-semibold">@initials</span>
+                }
             </div>
-        }
-
-        <form id="profile-form" method="post" class="space-y-8">
-            <div asp-validation-summary="ModelOnly" class="mb-6 p-4 bg-red-900/50 border border-red-700/50 rounded-xl text-red-200 text-sm" role="alert"></div>
-
-            <!-- Account Information -->
-            <div class="bg-slate-700/30 rounded-2xl p-6 border border-slate-600/50">
-                <div class="flex items-center mb-6">
-                    <div class="p-2 bg-brand-500/20 rounded-xl mr-3">
-                        <i data-lucide="user-circle" class="h-5 w-5 text-brand-400"></i>
-                    </div>
-                    <h3 class="text-xl font-bold text-white">Account Information</h3>
-                </div>
-
-                <div class="grid grid-cols-1 gap-6">
-                    <!-- Username (read-only) -->
-                    <div>
-                        <label asp-for="Username" class="block text-slate-300 text-sm font-semibold mb-3 flex items-center">
-                            <i data-lucide="at-sign" class="w-4 h-4 mr-2 text-slate-400"></i>
-                            Username
-                        </label>
-                        <input asp-for="Username" disabled class="w-full px-4 py-3 bg-slate-600/30 border border-slate-500/50 rounded-xl text-slate-400 cursor-not-allowed transition-all duration-200" />
-                        <p class="mt-1 text-xs text-slate-500">Your username cannot be changed</p>
-                    </div>
-
-                    <!-- Phone Number -->
-                    <div>
-                        <label asp-for="Input.PhoneNumber" class="block text-slate-300 text-sm font-semibold mb-3 flex items-center">
-                            <i data-lucide="phone" class="w-4 h-4 mr-2 text-slate-400"></i>
-                            Phone Number
-                        </label>
-                        <input asp-for="Input.PhoneNumber" type="tel" placeholder="+1 (555) 123-4567" class="w-full px-4 py-3 bg-slate-600/50 border border-slate-500/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-transparent transition-all duration-200" />
-                        <span asp-validation-for="Input.PhoneNumber" class="text-red-400 text-sm mt-1 flex items-center"></span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Room Assignment -->
-            <div class="bg-slate-700/30 rounded-2xl p-6 border border-slate-600/50">
-                <div class="flex items-center mb-6">
-                    <div class="p-2 bg-purple-500/20 rounded-xl mr-3">
-                        <i data-lucide="home" class="h-5 w-5 text-purple-400"></i>
-                    </div>
-                    <h3 class="text-xl font-bold text-white">Room Assignment</h3>
-                </div>
-
-                <div class="grid grid-cols-1 gap-6">
-                    @if (!string.IsNullOrEmpty(Model.RoomName))
+            <div>
+                <h1 class="text-base font-semibold text-white">
+                    @if (!string.IsNullOrEmpty(Model.Input?.FirstName) && !string.IsNullOrEmpty(Model.Input?.LastName))
                     {
-                        <!-- Room Name (read-only) -->
-                        <div>
-                            <label class="block text-slate-300 text-sm font-semibold mb-3 flex items-center">
-                                <i data-lucide="map-pin" class="w-4 h-4 mr-2 text-slate-400"></i>
-                                Assigned Room
-                            </label>
-                            <input value="@Model.RoomName" disabled class="w-full px-4 py-3 bg-slate-600/30 border border-slate-500/50 rounded-xl text-slate-400 cursor-not-allowed transition-all duration-200" />
-                        </div>
-
-                        @if (!string.IsNullOrEmpty(Model.RoomDescription))
-                        {
-                            <!-- Room Description (read-only) -->
-                            <div>
-                                <label class="block text-slate-300 text-sm font-semibold mb-3 flex items-center">
-                                    <i data-lucide="file-text" class="w-4 h-4 mr-2 text-slate-400"></i>
-                                    Room Description
-                                </label>
-                                <textarea disabled rows="3" class="w-full px-4 py-3 bg-slate-600/30 border border-slate-500/50 rounded-xl text-slate-400 cursor-not-allowed transition-all duration-200 resize-none">@Model.RoomDescription</textarea>
-                            </div>
-                        }
+                        @($"{Model.Input.FirstName} {Model.Input.LastName}")
                     }
                     else
                     {
-                        <div class="text-center py-8">
-                            <div class="p-4 bg-slate-600/30 rounded-2xl inline-block mb-3">
-                                <i data-lucide="home" class="w-10 h-10 text-slate-400"></i>
-                            </div>
-                            <p class="text-slate-400 text-sm">No room assigned yet</p>
-                            <p class="text-slate-500 text-xs mt-1">Contact an administrator to get assigned to a room</p>
-                        </div>
+                        @Model.Username
                     }
-                </div>
-            </div>
-
-            <!-- Save Button -->
-            <div class="flex items-center justify-between pt-6 border-t border-slate-700/50">
-                <div class="text-sm text-slate-400 flex items-center">
-                    <i data-lucide="info" class="w-4 h-4 mr-2"></i>
-                    Changes will be saved to your profile
-                </div>
-                <div class="flex items-center space-x-3">
-                    <button type="submit" class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl">
-                        <i data-lucide="save" class="w-4 h-4 mr-2"></i>
-                        Save Changes
-                    </button>
-                </div>
-            </div>
-        </form>
-
-        <!-- Additional Options -->
-        <div class="mt-8 pt-8 border-t border-slate-700/50">
-            <h3 class="text-lg font-bold text-white mb-4 flex items-center">
-                <i data-lucide="shield" class="w-5 h-5 mr-2 text-brand-400"></i>
-                Account Security
-            </h3>
-            <div class="space-y-3">
-                <a asp-page="./Email" class="flex items-center justify-between px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 rounded-xl transition-all duration-200 group">
-                    <div class="flex items-center">
-                        <i data-lucide="mail" class="w-5 h-5 mr-3 text-slate-400 group-hover:text-brand-400 transition-colors"></i>
-                        <div>
-                            <div class="text-sm font-semibold text-white">Email Address</div>
-                            <div class="text-xs text-slate-400">Manage your email settings</div>
-                        </div>
-                    </div>
-                    <i data-lucide="chevron-right" class="w-5 h-5 text-slate-500 group-hover:text-slate-300 transition-colors"></i>
-                </a>
-
-                <a asp-page="./ChangePassword" class="flex items-center justify-between px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 rounded-xl transition-all duration-200 group">
-                    <div class="flex items-center">
-                        <i data-lucide="lock" class="w-5 h-5 mr-3 text-slate-400 group-hover:text-brand-400 transition-colors"></i>
-                        <div>
-                            <div class="text-sm font-semibold text-white">Change Password</div>
-                            <div class="text-xs text-slate-400">Update your password</div>
-                        </div>
-                    </div>
-                    <i data-lucide="chevron-right" class="w-5 h-5 text-slate-500 group-hover:text-slate-300 transition-colors"></i>
-                </a>
+                </h1>
+                <p class="text-xs text-slate-400">@Model.CurrentEmail</p>
             </div>
         </div>
+        <button type="submit" form="settings-form" class="inline-flex items-center px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors">
+            <i data-lucide="save" class="w-3.5 h-3.5 mr-1.5"></i>
+            Save Changes
+        </button>
+    </div>
+</div>
+
+<!-- Messages -->
+@if (Model.StatusMessage != null)
+{
+    var isError = Model.StatusMessage.StartsWith("Error:");
+    var messageText = Model.StatusMessage.Replace("Error: ", "").Replace("Success: ", "");
+
+    <div class="mb-4 max-w-6xl mx-auto">
+        <div class="@(isError ? "bg-red-900/30 border-red-700/40 text-red-200" : "bg-emerald-900/30 border-emerald-700/40 text-emerald-200") border px-3 py-2 rounded-lg text-sm" role="alert">
+            <div class="flex items-center">
+                <i data-lucide="@(isError ? "alert-circle" : "check-circle")" class="w-4 h-4 mr-2 flex-shrink-0"></i>
+                <span>@messageText</span>
+            </div>
+        </div>
+    </div>
+}
+
+<form id="settings-form" method="post" enctype="multipart/form-data" class="max-w-6xl mx-auto space-y-4">
+    <div asp-validation-summary="ModelOnly" class="mb-4 p-3 bg-red-900/30 border border-red-700/40 rounded-lg text-red-200 text-sm" role="alert"></div>
+
+    <!-- Profile & Personal Info -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+        <!-- Profile Picture -->
+        <div class="md:col-span-1">
+            <div class="bg-slate-800/40 rounded-lg border border-slate-700/40 p-4">
+                <h3 class="text-sm font-semibold text-white mb-3 flex items-center">
+                    <i data-lucide="user-circle" class="w-4 h-4 mr-2 text-slate-400"></i>
+                    Profile Photo
+                </h3>
+
+                <div class="flex flex-col items-center">
+                    <div class="relative group mb-3">
+                        <div id="profilePicturePreview" class="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-brand-500 to-purple-600 border-2 border-slate-700 flex items-center justify-center transition-transform group-hover:scale-105 cursor-pointer" onclick="document.getElementById('profilePictureInput').click()">
+                            @if (!string.IsNullOrEmpty(Model.ProfilePicturePath))
+                            {
+                                <img src="@Model.ProfilePicturePath" alt="Profile" class="w-full h-full object-cover" id="currentProfilePic">
+                            }
+                            else
+                            {
+                                <div class="text-white text-3xl font-bold">@initials</div>
+                            }
+                            <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <i data-lucide="camera" class="w-6 h-6 text-white"></i>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.ProfilePicturePath))
+                        {
+                            <button type="submit" asp-page-handler="RemoveProfilePicture" class="absolute -bottom-0.5 -right-0.5 p-1.5 bg-red-600 hover:bg-red-700 rounded-full text-white transition-colors" title="Remove">
+                                <i data-lucide="x" class="w-3 h-3"></i>
+                            </button>
+                        }
+                    </div>
+
+                    <input type="file" asp-for="Input.ProfilePicture" id="profilePictureInput" accept="image/jpeg,image/png,image/gif" class="hidden" onchange="previewProfilePicture(this)">
+
+                    <button type="button" onclick="document.getElementById('profilePictureInput').click()" class="w-full px-3 py-1.5 bg-slate-700/50 hover:bg-slate-700 text-white text-xs font-medium rounded-md transition-colors border border-slate-600/50">
+                        <i data-lucide="upload" class="w-3 h-3 inline mr-1"></i>
+                        Upload
+                    </button>
+                    <p class="text-xs text-slate-500 mt-2 text-center">JPG, PNG • Max 5MB</p>
+                    <p class="text-xs text-brand-400 mt-1 text-center" id="fileNameDisplay"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Personal Information -->
+        <div class="md:col-span-3">
+            <div class="bg-slate-800/40 rounded-lg border border-slate-700/40 p-4">
+                <h3 class="text-sm font-semibold text-white mb-3 flex items-center">
+                    <i data-lucide="user" class="w-4 h-4 mr-2 text-slate-400"></i>
+                    Personal Information
+                </h3>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="relative">
+                        <input asp-for="Input.FirstName" type="text" id="firstName" placeholder=" " class="peer w-full px-3 pt-5 pb-1.5 bg-slate-700/30 border border-slate-600/40 rounded-md text-sm text-white placeholder-transparent focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 transition-all" />
+                        <label for="firstName" class="absolute left-3 top-1.5 text-xs text-slate-400 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-brand-400">First Name</label>
+                        <span asp-validation-for="Input.FirstName" class="text-red-400 text-xs mt-0.5 block"></span>
+                    </div>
+
+                    <div class="relative">
+                        <input asp-for="Input.LastName" type="text" id="lastName" placeholder=" " class="peer w-full px-3 pt-5 pb-1.5 bg-slate-700/30 border border-slate-600/40 rounded-md text-sm text-white placeholder-transparent focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 transition-all" />
+                        <label for="lastName" class="absolute left-3 top-1.5 text-xs text-slate-400 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-brand-400">Last Name</label>
+                        <span asp-validation-for="Input.LastName" class="text-red-400 text-xs mt-0.5 block"></span>
+                    </div>
+
+                    <div class="relative sm:col-span-2">
+                        <input asp-for="Input.PhoneNumber" type="tel" id="phoneNumber" placeholder=" " class="peer w-full px-3 pt-5 pb-1.5 bg-slate-700/30 border border-slate-600/40 rounded-md text-sm text-white placeholder-transparent focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 transition-all" />
+                        <label for="phoneNumber" class="absolute left-3 top-1.5 text-xs text-slate-400 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-brand-400">Phone Number</label>
+                        <span asp-validation-for="Input.PhoneNumber" class="text-red-400 text-xs mt-0.5 block"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Section (Full Width) -->
+    <div class="bg-slate-800/40 rounded-lg border border-slate-700/40 p-4">
+        <h3 class="text-sm font-semibold text-white mb-3 flex items-center">
+            <i data-lucide="lock" class="w-4 h-4 mr-2 text-slate-400"></i>
+            Change Password
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="relative">
+                <input asp-for="Input.CurrentPassword" type="password" id="currentPassword" placeholder=" " class="peer w-full px-3 pt-5 pb-1.5 bg-slate-700/30 border border-slate-600/40 rounded-md text-sm text-white placeholder-transparent focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 transition-all" />
+                <label for="currentPassword" class="absolute left-3 top-1.5 text-xs text-slate-400 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-orange-400">Current Password</label>
+                <span asp-validation-for="Input.CurrentPassword" class="text-red-400 text-xs mt-0.5 block"></span>
+            </div>
+
+            <div class="relative">
+                <input asp-for="Input.NewPassword" type="password" id="newPassword" placeholder=" " class="peer w-full px-3 pt-5 pb-1.5 bg-slate-700/30 border border-slate-600/40 rounded-md text-sm text-white placeholder-transparent focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 transition-all" />
+                <label for="newPassword" class="absolute left-3 top-1.5 text-xs text-slate-400 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-orange-400">New Password</label>
+                <span asp-validation-for="Input.NewPassword" class="text-red-400 text-xs mt-0.5 block"></span>
+            </div>
+
+            <div class="relative">
+                <input asp-for="Input.ConfirmPassword" type="password" id="confirmPassword" placeholder=" " class="peer w-full px-3 pt-5 pb-1.5 bg-slate-700/30 border border-slate-600/40 rounded-md text-sm text-white placeholder-transparent focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 transition-all" />
+                <label for="confirmPassword" class="absolute left-3 top-1.5 text-xs text-slate-400 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-orange-400">Confirm New Password</label>
+                <span asp-validation-for="Input.ConfirmPassword" class="text-red-400 text-xs mt-0.5 block"></span>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Drag & Drop Overlay -->
+<div id="dropOverlay" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-50 hidden items-center justify-center">
+    <div class="text-center">
+        <div class="w-24 h-24 mx-auto mb-4 rounded-full border-4 border-dashed border-brand-400 flex items-center justify-center animate-pulse">
+            <i data-lucide="upload-cloud" class="w-12 h-12 text-brand-400"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-1">Drop your photo here</h3>
+        <p class="text-sm text-slate-400">Release to upload</p>
     </div>
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
+        function previewProfilePicture(input) {
+            const preview = document.getElementById('profilePicturePreview');
+            const fileNameDisplay = document.getElementById('fileNameDisplay');
+            const currentPic = document.getElementById('currentProfilePic');
+
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                fileNameDisplay.textContent = file.name;
+
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('File size too large. Maximum size is 5MB.');
+                    input.value = '';
+                    fileNameDisplay.textContent = '';
+                    return;
+                }
+
+                const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+                if (!allowedTypes.includes(file.type)) {
+                    alert('Invalid file type. Please upload a JPG, PNG, or GIF image.');
+                    input.value = '';
+                    fileNameDisplay.textContent = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (currentPic) {
+                        currentPic.src = e.target.result;
+                    } else {
+                        preview.innerHTML = '<img src="' + e.target.result + '" alt="Profile" class="w-full h-full object-cover" id="currentProfilePic">';
+                    }
+                    lucide.createIcons();
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Drag and Drop
+        let dropArea = document.body;
+        let dropOverlay = document.getElementById('dropOverlay');
+        let profilePictureInput = document.getElementById('profilePictureInput');
+        let dragCounter = 0;
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, function(e) { e.preventDefault(); e.stopPropagation(); }, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => {
+                if (dragCounter === 0) {
+                    dropOverlay.classList.remove('hidden');
+                    dropOverlay.classList.add('flex');
+                }
+                dragCounter++;
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => {
+                dragCounter--;
+                if (dragCounter === 0) {
+                    dropOverlay.classList.add('hidden');
+                    dropOverlay.classList.remove('flex');
+                }
+            }, false);
+        });
+
+        dropArea.addEventListener('drop', function(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length > 0) {
+                profilePictureInput.files = files;
+                previewProfilePicture(profilePictureInput);
+            }
+        }, false);
+
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                document.getElementById('settings-form').submit();
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', function() {
             lucide.createIcons();
+            setTimeout(() => {
+                const alerts = document.querySelectorAll('[role="alert"]');
+                alerts.forEach(alert => {
+                    if (alert.classList.contains('bg-emerald-900')) {
+                        alert.style.opacity = '0';
+                        alert.style.transform = 'translateY(-10px)';
+                        setTimeout(() => alert.remove(), 300);
+                    }
+                });
+            }, 5000);
         });
     </script>
 }
