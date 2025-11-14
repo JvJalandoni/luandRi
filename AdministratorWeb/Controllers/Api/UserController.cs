@@ -17,11 +17,13 @@ namespace AdministratorWeb.Controllers.Api
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly IWebHostEnvironment _environment;
 
-        public UserController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
+        public UserController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IWebHostEnvironment environment)
         {
             _userManager = userManager;
             _roleManager = roleManager;
+            _environment = environment;
         }
 
         /// <summary>
@@ -85,12 +87,13 @@ namespace AdministratorWeb.Controllers.Api
                 phone = user.PhoneNumber,
                 roomName = user.RoomName,
                 roomDescription = user.RoomDescription,
-                assignedBeaconMacAddress = user.AssignedBeaconMacAddress
+                assignedBeaconMacAddress = user.AssignedBeaconMacAddress,
+                profilePicturePath = user.ProfilePicturePath
             });
         }
 
         [HttpPut("profile")]
-        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+        public async Task<IActionResult> UpdateProfile([FromForm] UpdateProfileRequest request)
         {
             var customerId = User.FindFirst("CustomerId")?.Value;
             if (string.IsNullOrEmpty(customerId))
@@ -104,7 +107,7 @@ namespace AdministratorWeb.Controllers.Api
                 return NotFound("User not found");
             }
 
-            if (string.IsNullOrWhiteSpace(request.FirstName) || string.IsNullOrWhiteSpace(request.LastName) || 
+            if (string.IsNullOrWhiteSpace(request.FirstName) || string.IsNullOrWhiteSpace(request.LastName) ||
                 string.IsNullOrWhiteSpace(request.Email))
             {
                 return BadRequest(new { success = false, message = "First name, last name, and email are required" });
@@ -116,10 +119,57 @@ namespace AdministratorWeb.Controllers.Api
             user.UserName = request.Email.Trim();
             user.PhoneNumber = request.Phone?.Trim();
 
+            // Handle Profile Picture Upload
+            if (request.ProfilePicture != null && request.ProfilePicture.Length > 0)
+            {
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
+                var fileExtension = Path.GetExtension(request.ProfilePicture.FileName).ToLowerInvariant();
+
+                if (!allowedExtensions.Contains(fileExtension))
+                {
+                    return BadRequest(new { success = false, message = "Invalid file type. Please upload a JPG, PNG, or GIF image." });
+                }
+
+                if (request.ProfilePicture.Length > 5 * 1024 * 1024)
+                {
+                    return BadRequest(new { success = false, message = "File size too large. Maximum size is 5MB." });
+                }
+
+                try
+                {
+                    var uploadsDir = Path.Combine(_environment.WebRootPath, "uploads", "profiles");
+                    Directory.CreateDirectory(uploadsDir);
+
+                    // Delete old profile picture if exists
+                    if (!string.IsNullOrEmpty(user.ProfilePicturePath))
+                    {
+                        var oldFilePath = Path.Combine(_environment.WebRootPath, user.ProfilePicturePath.TrimStart('/'));
+                        if (System.IO.File.Exists(oldFilePath))
+                        {
+                            System.IO.File.Delete(oldFilePath);
+                        }
+                    }
+
+                    var fileName = $"{user.Id}{fileExtension}";
+                    var filePath = Path.Combine(uploadsDir, fileName);
+
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await request.ProfilePicture.CopyToAsync(stream);
+                    }
+
+                    user.ProfilePicturePath = $"/uploads/profiles/{fileName}";
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { success = false, message = $"Error uploading profile picture: {ex.Message}" });
+                }
+            }
+
             var result = await _userManager.UpdateAsync(user);
             if (result.Succeeded)
             {
-                return Ok(new { success = true, message = "Profile updated successfully" });
+                return Ok(new { success = true, message = "Profile updated successfully", profilePicturePath = user.ProfilePicturePath });
             }
 
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
@@ -133,5 +183,6 @@ namespace AdministratorWeb.Controllers.Api
         public string LastName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string? Phone { get; set; }
+        public IFormFile? ProfilePicture { get; set; }
     }
 }

@@ -3,19 +3,47 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject UserManager<ApplicationUser> UserManager
 
+@{
+    var currentUser = await UserManager.GetUserAsync(User);
+    var profilePicture = currentUser?.ProfilePicturePath;
+    var initials = "";
+
+    if (!string.IsNullOrEmpty(currentUser?.FirstName) && !string.IsNullOrEmpty(currentUser?.LastName))
+    {
+        initials = $"{currentUser.FirstName[0]}{currentUser.LastName[0]}".ToUpper();
+    }
+    else if (!string.IsNullOrEmpty(User.Identity?.Name))
+    {
+        initials = User.Identity.Name.Substring(0, Math.Min(2, User.Identity.Name.Length)).ToUpper();
+    }
+}
+
 @if (Context.Request.Path.StartsWithSegments("/dashboard") || Context.Request.Path.StartsWithSegments("/robots") || Context.Request.Path.StartsWithSegments("/users") || Context.Request.Path.StartsWithSegments("/accounting") || Context.Request.Path.StartsWithSegments("/requests"))
 {
     <!-- Dark mode admin layout -->
     @if (SignInManager.IsSignedIn(User))
     {
         <div class="flex items-center space-x-6">
+            <!-- Theme Toggle -->
+            <button type="button" id="themeToggleButton" class="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-xl transition-all duration-200" title="Toggle theme">
+                <i data-lucide="sun" class="w-5 h-5 hidden dark-mode-icon"></i>
+                <i data-lucide="moon" class="w-5 h-5 light-mode-icon"></i>
+            </button>
+
             <!-- User menu -->
             <div class="relative">
                 <button id="userMenuButton" class="flex items-center space-x-3 p-2 text-sm text-slate-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded-xl transition-all duration-200 hover:bg-slate-700/50">
                     <div class="flex items-center space-x-3">
                         <div class="relative">
-                            <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-md">
-                                <span class="text-white font-semibold text-sm">@User.Identity?.Name?.Substring(0, 1).ToUpper()</span>
+                            <div class="h-9 w-9 rounded-xl overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-md">
+                                @if (!string.IsNullOrEmpty(profilePicture))
+                                {
+                                    <img src="@profilePicture" alt="Profile" class="w-full h-full object-cover">
+                                }
+                                else
+                                {
+                                    <span class="text-white font-semibold text-sm">@initials</span>
+                                }
                             </div>
                             <div class="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-emerald-500 border-2 border-slate-800 rounded-full"></div>
                         </div>
@@ -26,13 +54,20 @@
                         <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform duration-200 group-hover:rotate-180"></i>
                     </div>
                 </button>
-                
+
                 <div id="userDropdown" class="hidden absolute right-0 mt-3 w-64 bg-slate-800/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-700/50 z-50 overflow-hidden">
                     <!-- Profile header -->
                     <div class="p-4 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-b border-slate-700/50">
                         <div class="flex items-center space-x-3">
-                            <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
-                                <span class="text-white font-semibold">@User.Identity?.Name?.Substring(0, 1).ToUpper()</span>
+                            <div class="h-12 w-12 rounded-xl overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
+                                @if (!string.IsNullOrEmpty(profilePicture))
+                                {
+                                    <img src="@profilePicture" alt="Profile" class="w-full h-full object-cover">
+                                }
+                                else
+                                {
+                                    <span class="text-white font-semibold">@initials</span>
+                                }
                             </div>
                             <div>
                                 <div class="text-sm font-semibold text-white">@User.Identity?.Name</div>
@@ -51,17 +86,13 @@
                             <span>Profile Settings</span>
                             <i data-lucide="external-link" class="w-3 h-3 ml-auto text-slate-500"></i>
                         </a>
-                        
-                        <a href="#" class="flex items-center px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-700/50 hover:text-white rounded-xl transition-all duration-200">
-                            <i data-lucide="settings" class="w-4 h-4 mr-3 text-slate-400"></i>
-                            <span>Preferences</span>
-                        </a>
-                        
-                        <a href="#" class="flex items-center px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-700/50 hover:text-white rounded-xl transition-all duration-200">
-                            <i data-lucide="help-circle" class="w-4 h-4 mr-3 text-slate-400"></i>
-                            <span>Help & Support</span>
-                        </a>
-                        
+
+                        <button type="button" id="themeToggleDropdown" class="flex items-center w-full px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-700/50 hover:text-white rounded-xl transition-all duration-200 text-left">
+                            <i data-lucide="sun" class="w-4 h-4 mr-3 text-slate-400 hidden dark-mode-icon"></i>
+                            <i data-lucide="moon" class="w-4 h-4 mr-3 text-slate-400 light-mode-icon"></i>
+                            <span class="theme-text">Dark Mode</span>
+                        </button>
+
                         <div class="h-px bg-slate-700/50 my-2"></div>
                         
                         <form asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="@Url.Action("Index", "Home", new { area = "" })" method="post" class="block">
@@ -94,8 +125,15 @@ else
             <!-- User profile for public pages -->
             <div class="relative">
                 <button id="publicUserMenuButton" class="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all duration-200">
-                    <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                        <span class="text-white font-medium text-xs">@User.Identity?.Name?.Substring(0, 1).ToUpper()</span>
+                    <div class="h-8 w-8 rounded-lg overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                        @if (!string.IsNullOrEmpty(profilePicture))
+                        {
+                            <img src="@profilePicture" alt="Profile" class="w-full h-full object-cover">
+                        }
+                        else
+                        {
+                            <span class="text-white font-medium text-xs">@initials</span>
+                        }
                     </div>
                     <span class="hidden sm:block">@User.Identity?.Name</span>
                     <i data-lucide="chevron-down" class="w-4 h-4"></i>

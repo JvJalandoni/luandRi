@@ -61,9 +61,7 @@
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
-                                    <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500/20 to-indigo-500/20 flex items-center justify-center group-hover:from-brand-500/30 group-hover:to-indigo-500/30 transition-all duration-200">
-                                        <i data-lucide="user" class="h-5 w-5 text-brand-400"></i>
-                                    </div>
+                                    @await Component.InvokeAsync("UserAvatar", new { userId = user.Id, userName = user.FullName, size = "h-12 w-12", textSize = "text-base" })
                                 </div>
                                 <div class="ml-4">
                                     <div class="text-sm font-semibold text-white">@user.FullName</div>

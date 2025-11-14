@@ -60,8 +60,8 @@
 </head>
 <body class="bg-dark-custom antialiased">
     @{
-        var adminRoutes = new[] { "/dashboard", "/robots", "/users", "/accounting", "/requests", "/beacon", "/rooms", "/messages" };
-        var isAdminPage = adminRoutes.Any(route => Context.Request.Path.StartsWithSegments(route));
+        var adminRoutes = new[] { "/dashboard", "/robots", "/users", "/accounting", "/requests", "/beacon", "/rooms", "/messages", "/identity/account/manage" };
+        var isAdminPage = adminRoutes.Any(route => Context.Request.Path.StartsWithSegments(route, StringComparison.OrdinalIgnoreCase));
     }
     @if (isAdminPage)
     {
@@ -113,7 +113,10 @@
                                     </a>
                                     <a asp-controller="Messages" asp-action="Index" class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Messages" ? "bg-brand-600 text-white shadow-lg" : "text-slate-300 hover:bg-slate-700/50 hover:text-white") group flex items-center px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-200">
                                         <i data-lucide="messages-square" class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Messages" ? "text-white" : "text-slate-400") mr-3 h-5 w-5"></i>
-                                        <span>Messages</span>
+                                        <div class="flex items-center justify-between flex-1">
+                                            <span>Messages</span>
+                                            <span class="ml-1 text-xs text-slate-400">@await Component.InvokeAsync("UnreadMessages")</span>
+                                        </div>
                                     </a>
                                 </div>
                             </div>
@@ -137,10 +140,6 @@
                                     <a asp-controller="Beacon" asp-action="Index" class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Beacon" ? "bg-brand-600 text-white shadow-lg" : "text-slate-300 hover:bg-slate-700/50 hover:text-white") group flex items-center px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-200">
                                         <i data-lucide="radio" class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Beacon" ? "text-white" : "text-slate-400") mr-3 h-5 w-5"></i>
                                         Beacons
-                                    </a>
-                                    <a asp-controller="AuditLogs" asp-action="Index" class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "AuditLogs" ? "bg-brand-600 text-white shadow-lg" : "text-slate-300 hover:bg-slate-700/50 hover:text-white") group flex items-center px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-200">
-                                        <i data-lucide="shield-check" class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "AuditLogs" ? "text-white" : "text-slate-400") mr-3 h-5 w-5"></i>
-                                        Audit Logs
                                     </a>
                                 </div>
                             </div>
@@ -384,7 +383,45 @@
     <script>
         // Initialize icons
         lucide.createIcons();
-        
+
+        // Theme management
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            if (savedTheme === 'light') {
+                document.documentElement.classList.add('light-mode');
+                updateThemeIcons(true);
+            } else {
+                document.documentElement.classList.remove('light-mode');
+                updateThemeIcons(false);
+            }
+        }
+
+        function updateThemeIcons(isLight) {
+            const darkIcons = document.querySelectorAll('.dark-mode-icon');
+            const lightIcons = document.querySelectorAll('.light-mode-icon');
+            const themeTexts = document.querySelectorAll('.theme-text');
+
+            if (isLight) {
+                darkIcons.forEach(icon => icon.classList.remove('hidden'));
+                lightIcons.forEach(icon => icon.classList.add('hidden'));
+                themeTexts.forEach(text => text.textContent = 'Light Mode');
+            } else {
+                darkIcons.forEach(icon => icon.classList.add('hidden'));
+                lightIcons.forEach(icon => icon.classList.remove('hidden'));
+                themeTexts.forEach(text => text.textContent = 'Dark Mode');
+            }
+        }
+
+        function toggleTheme() {
+            const isLight = document.documentElement.classList.toggle('light-mode');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            updateThemeIcons(isLight);
+            lucide.createIcons();
+        }
+
+        // Initialize theme on load
+        initTheme();
+
         // Modal functions
         function openLoginModal() {
             const modal = document.getElementById('loginModal');
@@ -402,6 +439,18 @@
         
         // DOM ready
         document.addEventListener('DOMContentLoaded', function() {
+            // Theme toggle buttons
+            const themeToggleButton = document.getElementById('themeToggleButton');
+            const themeToggleDropdown = document.getElementById('themeToggleDropdown');
+
+            if (themeToggleButton) {
+                themeToggleButton.addEventListener('click', toggleTheme);
+            }
+
+            if (themeToggleDropdown) {
+                themeToggleDropdown.addEventListener('click', toggleTheme);
+            }
+
             // User dropdown toggles
             const userMenuButton = document.getElementById('userMenuButton');
             const userDropdown = document.getElementById('userDropdown');

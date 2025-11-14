@@ -151,6 +151,21 @@ namespace AdministratorWeb.Controllers
                 return NotFound();
             }
 
+            // Capture old values for audit logging
+            var oldValues = new
+            {
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.UserName,
+                user.PhoneNumber,
+                user.IsActive,
+                user.AssignedBeaconMacAddress,
+                user.RoomName,
+                user.RoomDescription,
+                Roles = await _userManager.GetRolesAsync(user)
+            };
+
             // Update basic user properties
             user.FirstName = firstName;
             user.LastName = lastName;
@@ -219,6 +234,23 @@ namespace AdministratorWeb.Controllers
             await _userManager.RemoveFromRolesAsync(user, currentRoles);
             await _userManager.AddToRoleAsync(user, role);
 
+            // Capture new values for audit logging
+            var newValues = new
+            {
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.UserName,
+                user.PhoneNumber,
+                user.IsActive,
+                user.AssignedBeaconMacAddress,
+                user.RoomName,
+                user.RoomDescription,
+                Roles = new[] { role },
+                PasswordChanged = !string.IsNullOrWhiteSpace(newPassword)
+            };
+
+
             TempData["Success"] = "User updated successfully.";
             return RedirectToAction(nameof(Index));
         }
@@ -232,8 +264,10 @@ namespace AdministratorWeb.Controllers
                 return NotFound();
             }
 
+            var oldStatus = user.IsActive;
             user.IsActive = !user.IsActive;
             await _userManager.UpdateAsync(user);
+
 
             return RedirectToAction(nameof(Index));
         }
@@ -256,7 +290,25 @@ namespace AdministratorWeb.Controllers
             var user = await _userManager.FindByIdAsync(id);
             if (user != null)
             {
+                var userRoles = await _userManager.GetRolesAsync(user);
+                var oldValues = new
+                {
+                    user.Id,
+                    user.FirstName,
+                    user.LastName,
+                    user.Email,
+                    user.UserName,
+                    user.PhoneNumber,
+                    user.IsActive,
+                    user.AssignedBeaconMacAddress,
+                    user.RoomName,
+                    user.RoomDescription,
+                    Roles = userRoles
+                };
+
                 await _userManager.DeleteAsync(user);
+
+
                 TempData["Success"] = "User deleted successfully.";
             }
 

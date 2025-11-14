@@ -19,6 +19,7 @@ export interface UserProfile {
   roomName?: string;
   roomDescription?: string;
   assignedBeaconMacAddress?: string;
+  profilePicturePath?: string;
 }
 
 export interface UpdateProfileRequest {
@@ -26,6 +27,11 @@ export interface UpdateProfileRequest {
   lastName: string;
   email: string;
   phone?: string;
+  profilePicture?: {
+    uri: string;
+    name: string;
+    type: string;
+  };
 }
 
 export interface NotificationSettings {
@@ -77,20 +83,48 @@ export const userService = {
     return response.data;
   },
 
-  async updateProfile(data: UpdateProfileRequest): Promise<{ success: boolean; message: string }> {
-    // Transform to PascalCase for ASP.NET API
-    const payload = {
-      FirstName: data.firstName,
-      LastName: data.lastName,
-      Email: data.email,
-      Phone: data.phone,
-    };
+  async updateProfile(data: UpdateProfileRequest): Promise<{ success: boolean; message: string; profilePicturePath?: string }> {
+    // Check if we're uploading a profile picture
+    if (data.profilePicture) {
+      // Use FormData to support file uploads
+      const formData = new FormData();
+      formData.append('FirstName', data.firstName);
+      formData.append('LastName', data.lastName);
+      formData.append('Email', data.email);
+      if (data.phone) {
+        formData.append('Phone', data.phone);
+      }
 
-    const response = await apiPut('/user/profile', payload);
-    if (!response) {
-      throw new Error('Failed to update profile - no response');
+      // Add profile picture
+      const file: any = {
+        uri: data.profilePicture.uri,
+        name: data.profilePicture.name,
+        type: data.profilePicture.type,
+      };
+      formData.append('ProfilePicture', file);
+
+      // For FormData, don't set Content-Type - axios will handle it
+      const response = await apiPut('/user/profile', formData);
+
+      if (!response) {
+        throw new Error('Failed to update profile - no response');
+      }
+      return response.data;
+    } else {
+      // No profile picture - use JSON
+      const payload = {
+        FirstName: data.firstName,
+        LastName: data.lastName,
+        Email: data.email,
+        Phone: data.phone,
+      };
+
+      const response = await apiPut('/user/profile', payload);
+      if (!response) {
+        throw new Error('Failed to update profile - no response');
+      }
+      return response.data;
     }
-    return response.data;
   },
 
   async getNotificationSettings(): Promise<NotificationSettings> {
