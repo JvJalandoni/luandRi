@@ -16,8 +16,11 @@
         </div>
         <div class="px-6 py-4 space-y-4">
             <div>
-                <label class="block text-sm font-medium text-gray-300">Customer Name</label>
-                <div class="mt-1 text-white">@Model.CustomerName</div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Customer</label>
+                <div class="mt-1 flex items-center space-x-3">
+                    @await Component.InvokeAsync("UserAvatar", new { userId = Model.CustomerId, userName = Model.CustomerName, size = "w-10 h-10", textSize = "text-xs" })
+                    <div class="text-white font-medium">@Model.CustomerName</div>
+                </div>
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-300">Customer ID</label>

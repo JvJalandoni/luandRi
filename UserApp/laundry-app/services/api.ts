@@ -96,9 +96,17 @@ export const apiGet = async (endpoint: string, config?: any) => {
 export const apiPost = async (endpoint: string, data?: any, config?: any) => {
         try {
                 const headers = await getAuthHeaders();
+
+                // If data is FormData, don't set Content-Type - let axios handle it
+                const finalHeaders = { ...headers, ...(config?.headers || {}) };
+                if (data instanceof FormData) {
+                        console.log('📤 [API] FormData detected, removing Content-Type header');
+                        delete finalHeaders['Content-Type'];
+                }
+
                 const response = await axios.post(`${API_BASE_URL}${endpoint}`, data, {
                         ...config,
-                        headers: { ...headers, ...(config?.headers || {}) },
+                        headers: finalHeaders,
                         timeout: 10000
                 });
                 return response;
@@ -124,9 +132,17 @@ export const apiPost = async (endpoint: string, data?: any, config?: any) => {
 export const apiPut = async (endpoint: string, data?: any, config?: any) => {
         try {
                 const headers = await getAuthHeaders();
+
+                // If data is FormData, don't set Content-Type - let axios handle it
+                const finalHeaders = { ...headers, ...(config?.headers || {}) };
+                if (data instanceof FormData) {
+                        console.log('📤 [API] FormData detected, removing Content-Type header');
+                        delete finalHeaders['Content-Type'];
+                }
+
                 const response = await axios.put(`${API_BASE_URL}${endpoint}`, data, {
                         ...config,
-                        headers: { ...headers, ...(config?.headers || {}) },
+                        headers: finalHeaders,
                         timeout: 10000
                 });
                 return response;

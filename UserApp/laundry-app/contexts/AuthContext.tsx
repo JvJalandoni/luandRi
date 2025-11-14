@@ -12,6 +12,7 @@ interface User {
   roomName?: string;
   roomDescription?: string;
   assignedBeaconMacAddress?: string;
+  profilePicturePath?: string;
 }
 
 interface AuthContextType {
@@ -130,6 +131,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           roomName: profile.roomName,
           roomDescription: profile.roomDescription,
           assignedBeaconMacAddress: profile.assignedBeaconMacAddress,
+          profilePicturePath: profile.profilePicturePath,
         } : null;
       });
     } catch (error) {

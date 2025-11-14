@@ -28,9 +28,14 @@
                     
                     <tr class="hover:bg-gray-700">
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm font-medium text-white">@request.CustomerName</div>
-                            <div class="text-sm text-gray-400">@request.CustomerPhone</div>
-                            <div class="text-xs text-gray-500">ID: @request.CustomerId</div>
+                            <div class="flex items-center space-x-3">
+                                @await Component.InvokeAsync("UserAvatar", new { userId = request.CustomerId, userName = request.CustomerName, size = "w-10 h-10", textSize = "text-xs" })
+                                <div>
+                                    <div class="text-sm font-medium text-white">@request.CustomerName</div>
+                                    <div class="text-sm text-gray-400">@request.CustomerPhone</div>
+                                    <div class="text-xs text-gray-500">ID: @request.CustomerId</div>
+                                </div>
+                            </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm font-medium text-white">Request #@request.Id</div>

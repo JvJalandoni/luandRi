@@ -141,8 +141,13 @@
                 {
                     <tr class="hover:bg-gray-700">
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm font-medium text-white">@payment.CustomerName</div>
-                            <div class="text-sm text-gray-400">ID: @payment.CustomerId</div>
+                            <div class="flex items-center space-x-3">
+                                @await Component.InvokeAsync("UserAvatar", new { userId = payment.CustomerId, userName = payment.CustomerName, size = "w-10 h-10", textSize = "text-xs" })
+                                <div>
+                                    <div class="text-sm font-medium text-white">@payment.CustomerName</div>
+                                    <div class="text-sm text-gray-400">ID: @payment.CustomerId</div>
+                                </div>
+                            </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm font-medium text-white">@payment.TransactionId</div>

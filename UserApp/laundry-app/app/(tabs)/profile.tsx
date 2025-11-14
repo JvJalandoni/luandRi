@@ -41,7 +41,6 @@ export default function ProfileScreen() {
         const [phone, setPhone] = useState('');
         const [isLoading, setIsLoading] = useState(false);
         const [profilePicturePath, setProfilePicturePath] = useState<string | null>(null);
-        const [selectedImage, setSelectedImage] = useState<{uri: string; name: string; type: string} | null>(null);
         const [isUploadingImage, setIsUploadingImage] = useState(false);
 
         const backgroundColor = useThemeColor({}, 'background');
@@ -70,24 +69,48 @@ export default function ProfileScreen() {
          * Populates form fields with current user information
          */
         const loadProfile = async () => {
+                console.log('📥 loadProfile CALLED');
+                console.log('👤 User context:', user);
+
                 try {
                         const profile = await userService.getProfile();
-                        setFirstName(profile.firstName);
-                        setLastName(profile.lastName);
-                        setEmail(profile.email);
-                        setPhone(profile.phone || '');
+                        console.log('📊 Profile from API:', profile);
+
+                        // Always use fallbacks if profile fields are empty
+                        const [first, ...lastParts] = user?.customerName?.split(' ') || ['', ''];
+
+                        const finalFirstName = profile.firstName || first || '';
+                        const finalLastName = profile.lastName || lastParts.join(' ') || '';
+                        const finalEmail = profile.email || user?.email || '';
+                        const finalPhone = profile.phone || user?.phone || '';
+
+                        console.log('✅ Setting state values:', { finalFirstName, finalLastName, finalEmail, finalPhone });
+
+                        setFirstName(finalFirstName);
+                        setLastName(finalLastName);
+                        setEmail(finalEmail);
+                        setPhone(finalPhone);
                         setProfilePicturePath(profile.profilePicturePath || null);
                 } catch (error) {
+                        console.error('❌ loadProfile error:', error);
                         // If profile doesn't exist, use user data from auth
                         if (user) {
                                 const [first, ...lastParts] = user.customerName.split(' ');
+                                console.log('🔄 Using fallback from user context:', { first, last: lastParts.join(' ') });
                                 setFirstName(first || '');
                                 setLastName(lastParts.join(' ') || '');
+                                setEmail(user.email || '');
+                                setPhone(user.phone || '');
+                                setProfilePicturePath(user.profilePicturePath || null);
                         }
                 }
         };
 
         const handlePickImage = async () => {
+                console.log('🖼️ handlePickImage CALLED');
+                console.log('📝 Current state values:', { firstName, lastName, email, phone });
+                console.log('👤 User from context:', user);
+
                 try {
                         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -108,39 +131,64 @@ export default function ProfileScreen() {
                                 const fileName = asset.uri.split('/').pop() || 'profile.jpg';
                                 const type = `image/${fileName.split('.').pop() || 'jpeg'}`;
 
-                                setSelectedImage({
+                                const imageData = {
                                         uri: asset.uri,
                                         name: fileName,
                                         type: type,
-                                });
+                                };
+
+                                console.log('📤 Uploading profile picture WITH current profile data (same as admin)');
+
+                                setIsUploadingImage(true);
+                                try {
+                                        // Use updateProfile with JUST the profile picture + existing data
+                                        // This matches how the admin profile works
+                                        const result = await userService.updateProfile({
+                                                firstName: firstName || user?.customerName?.split(' ')[0] || '',
+                                                lastName: lastName || user?.customerName?.split(' ').slice(1).join(' ') || '',
+                                                email: email || user?.email || '',
+                                                phone: phone || undefined,
+                                                profilePicture: imageData
+                                        });
+
+                                        console.log('✅ Upload successful:', result);
+
+                                        if (result.profilePicturePath) {
+                                                setProfilePicturePath(result.profilePicturePath);
+                                        }
+
+                                        await refreshProfile();
+                                        showAlert('Success', 'Profile picture updated successfully');
+                                } catch (error: any) {
+                                        console.error('❌ Upload failed:', error);
+                                        showAlert('Error', error.response?.data?.message || 'Failed to upload profile picture');
+                                } finally {
+                                        setIsUploadingImage(false);
+                                }
                         }
                 } catch (error) {
+                        console.error('❌ Image picker error:', error);
                         showAlert('Error', 'Failed to pick image');
                 }
         };
 
         const handleSave = async () => {
-                if (!firstName.trim() || !lastName.trim() || !email.trim()) {
-                        showAlert('Error', 'Please fill in all required fields');
-                        return;
-                }
+                // Get fallback values from user context
+                const [first, ...lastParts] = user?.customerName?.split(' ') || ['User', ''];
+
+                const finalFirstName = firstName.trim() || first || 'User';
+                const finalLastName = lastName.trim() || lastParts.join(' ') || '';
+                const finalEmail = email.trim() || user?.email || 'noemail@example.com';
 
                 setIsLoading(true);
                 try {
                         const result = await userService.updateProfile({
-                                firstName: firstName.trim(),
-                                lastName: lastName.trim(),
-                                email: email.trim(),
+                                firstName: finalFirstName,
+                                lastName: finalLastName,
+                                email: finalEmail,
                                 phone: phone.trim() || undefined,
-                                profilePicture: selectedImage || undefined,
                         });
 
-                        // Update profile picture path if returned
-                        if (result.profilePicturePath) {
-                                setProfilePicturePath(result.profilePicturePath);
-                        }
-
-                        setSelectedImage(null); // Clear selected image
                         await refreshProfile(); // Refresh to show updated data
                         showAlert('Success', 'Profile updated successfully');
                         setIsEditing(false);
@@ -153,7 +201,6 @@ export default function ProfileScreen() {
 
         const handleCancel = () => {
                 setIsEditing(false);
-                setSelectedImage(null); // Clear any selected image
                 loadProfile(); // Reset to original values
         };
 
@@ -185,17 +232,25 @@ export default function ProfileScreen() {
                 <ThemedView style={styles.container}>
                         <ScrollView style={styles.scrollContainer}>
                                 <View style={styles.header}>
-                                        <TouchableOpacity onPress={handlePickImage} style={styles.avatarContainer}>
+                                        <TouchableOpacity
+                                                onPress={handlePickImage}
+                                                style={styles.avatarContainer}
+                                        >
                                                 <View style={[styles.avatar, { backgroundColor: primaryColor }]}>
-                                                        {(selectedImage || profilePicturePath) ? (
+                                                        {profilePicturePath ? (
                                                                 <Image
-                                                                        source={{ uri: selectedImage?.uri || `http://140.245.51.90:23000${profilePicturePath}` }}
+                                                                        source={{ uri: `http://140.245.51.90:23000${profilePicturePath}` }}
                                                                         style={styles.avatarImage}
                                                                 />
                                                         ) : (
                                                                 <Text style={styles.avatarText}>
                                                                         {firstName.charAt(0)}{lastName.charAt(0)}
                                                                 </Text>
+                                                        )}
+                                                        {isUploadingImage && (
+                                                                <View style={[styles.avatarImage, { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }]}>
+                                                                        <ActivityIndicator size="large" color="#ffffff" />
+                                                                </View>
                                                         )}
                                                 </View>
                                                 <View style={[styles.cameraIcon, { backgroundColor: primaryColor }]}>
@@ -204,11 +259,6 @@ export default function ProfileScreen() {
                                         </TouchableOpacity>
                                         <ThemedText style={styles.userName}>{user?.customerName || 'User'}</ThemedText>
                                         <ThemedText style={[styles.userId, { color: mutedColor }]}>ID: {user?.customerId || 'N/A'}</ThemedText>
-                                        {selectedImage && (
-                                                <ThemedText style={[styles.imageSelected, { color: primaryColor }]}>
-                                                        New photo selected - Save to upload
-                                                </ThemedText>
-                                        )}
                                 </View>
 
                                 <View style={[styles.section, { backgroundColor: cardColor }]}>

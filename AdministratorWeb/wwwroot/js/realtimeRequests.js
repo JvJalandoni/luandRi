@@ -138,6 +138,44 @@ class RealtimeRequestsManager {
         container.innerHTML = requestsHTML;
 
         lucide.createIcons();
+
+        // Load profile pictures for all requests
+        data.requests.forEach(request => {
+            this.loadProfilePicture(request.id, request.customerId, request.customerName);
+        });
+    }
+
+    getInitials(name) {
+        if (!name) return '?';
+        const parts = name.trim().split(' ');
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        } else if (parts.length === 1 && parts[0].length >= 2) {
+            return parts[0].substring(0, 2).toUpperCase();
+        }
+        return parts[0][0].toUpperCase();
+    }
+
+    async loadProfilePicture(requestId, customerId, customerName) {
+        if (!customerId) return;
+
+        const avatarContainer = document.getElementById(`avatar-${requestId}`);
+        if (!avatarContainer) return;
+
+        try {
+            const response = await fetch(`/api/users/${customerId}`);
+            if (response.ok) {
+                const userData = await response.json();
+
+                if (userData.profilePicturePath) {
+                    avatarContainer.innerHTML = `<img src="${userData.profilePicturePath}" alt="Profile" class="w-full h-full rounded-full object-cover">`;
+                }
+                // If no profile picture, keep the initials that are already there
+            }
+        } catch (error) {
+            console.error('Error loading profile picture:', error);
+            // Keep the initials fallback on error
+        }
     }
 
     getRequestHTML(request) {
@@ -151,8 +189,8 @@ class RealtimeRequestsManager {
                 <div class="flex items-center justify-between">
                     <div class="flex items-center space-x-4 flex-1">
                         <div class="flex-shrink-0">
-                            <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500/20 to-indigo-500/20 flex items-center justify-center group-hover:from-brand-500/30 group-hover:to-indigo-500/30 transition-all duration-200">
-                                <i data-lucide="user" class="h-5 w-5 text-brand-400"></i>
+                            <div id="avatar-${request.id}" class="h-12 w-12 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                                <span class="text-white font-semibold text-sm">${this.getInitials(request.customerName)}</span>
                             </div>
                         </div>
                         <div class="min-w-0 flex-1">

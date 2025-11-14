@@ -58,11 +58,7 @@
                             <div class="flex items-center gap-4">
                                 <!-- Avatar -->
                                 <div class="relative flex-shrink-0">
-                                    <div class="w-12 h-12 bg-gradient-to-br from-brand-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg group-hover:shadow-brand-500/50 transition-shadow duration-200">
-                                        <span class="text-white font-bold text-lg">
-                                            @conversation.CustomerName.Substring(0, 1).ToUpper()
-                                        </span>
-                                    </div>
+                                    @await Component.InvokeAsync("UserAvatar", new { userId = conversation.CustomerId, userName = conversation.CustomerName, size = "w-12 h-12", textSize = "text-lg" })
                                     @if (conversation.UnreadCount > 0)
                                     {
                                         <div class="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center border-2 border-slate-800 animate-pulse">

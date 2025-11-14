@@ -57,6 +57,89 @@ namespace AdministratorWeb.Controllers.Api
             return Ok(adminList);
         }
 
+        /// <summary>
+        /// Upload profile picture ONLY - Separate endpoint like Facebook/Instagram
+        /// </summary>
+        [HttpPost("profile/picture")]
+        public async Task<IActionResult> UploadProfilePicture([FromForm] IFormFile profilePicture)
+        {
+            Console.WriteLine("========================================");
+            Console.WriteLine("[API UPLOAD PROFILE PICTURE] REQUEST RECEIVED");
+            Console.WriteLine($"[API] ProfilePicture: {(profilePicture != null ? $"YES ({profilePicture.Length} bytes, {profilePicture.FileName})" : "NULL")}");
+            Console.WriteLine("========================================");
+
+            var customerId = User.FindFirst("CustomerId")?.Value;
+            if (string.IsNullOrEmpty(customerId))
+            {
+                return Unauthorized("Customer ID not found in token");
+            }
+
+            var user = await _userManager.FindByIdAsync(customerId);
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            if (profilePicture == null || profilePicture.Length == 0)
+            {
+                return BadRequest(new { success = false, message = "No profile picture provided" });
+            }
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
+            var fileExtension = Path.GetExtension(profilePicture.FileName).ToLowerInvariant();
+
+            if (!allowedExtensions.Contains(fileExtension))
+            {
+                return BadRequest(new { success = false, message = "Invalid file type. Please upload a JPG, PNG, or GIF image." });
+            }
+
+            if (profilePicture.Length > 5 * 1024 * 1024)
+            {
+                return BadRequest(new { success = false, message = "File size too large. Maximum size is 5MB." });
+            }
+
+            try
+            {
+                var uploadsDir = Path.Combine(_environment.WebRootPath, "uploads", "profiles");
+                Directory.CreateDirectory(uploadsDir);
+
+                // Delete old profile picture if exists
+                if (!string.IsNullOrEmpty(user.ProfilePicturePath))
+                {
+                    var oldFilePath = Path.Combine(_environment.WebRootPath, user.ProfilePicturePath.TrimStart('/'));
+                    if (System.IO.File.Exists(oldFilePath))
+                    {
+                        System.IO.File.Delete(oldFilePath);
+                    }
+                }
+
+                var fileName = $"{user.Id}{fileExtension}";
+                var filePath = Path.Combine(uploadsDir, fileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await profilePicture.CopyToAsync(stream);
+                }
+
+                user.ProfilePicturePath = $"/uploads/profiles/{fileName}";
+
+                var result = await _userManager.UpdateAsync(user);
+                if (result.Succeeded)
+                {
+                    Console.WriteLine($"[API] ✅ Profile picture uploaded successfully: {user.ProfilePicturePath}");
+                    return Ok(new { success = true, message = "Profile picture updated successfully", profilePicturePath = user.ProfilePicturePath });
+                }
+
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                return BadRequest(new { success = false, message = errors });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[API] ❌ Error uploading profile picture: {ex.Message}");
+                return BadRequest(new { success = false, message = $"Error uploading profile picture: {ex.Message}" });
+            }
+        }
+
         [HttpGet("profile")]
         public async Task<IActionResult> GetProfile()
         {
@@ -95,33 +178,44 @@ namespace AdministratorWeb.Controllers.Api
         [HttpPut("profile")]
         public async Task<IActionResult> UpdateProfile([FromForm] UpdateProfileRequest request)
         {
+            // ===== EXTENSIVE DEBUGGING =====
+            Console.WriteLine("========================================");
+            Console.WriteLine("[API UPDATE PROFILE] REQUEST RECEIVED");
+            Console.WriteLine($"[API] FirstName: '{request.FirstName ?? "NULL"}' (Length: {request.FirstName?.Length ?? 0})");
+            Console.WriteLine($"[API] LastName: '{request.LastName ?? "NULL"}' (Length: {request.LastName?.Length ?? 0})");
+            Console.WriteLine($"[API] Email: '{request.Email ?? "NULL"}' (Length: {request.Email?.Length ?? 0})");
+            Console.WriteLine($"[API] Phone: '{request.Phone ?? "NULL"}'");
+            Console.WriteLine($"[API] ProfilePicture: {(request.ProfilePicture != null ? $"YES ({request.ProfilePicture.Length} bytes)" : "NULL")}");
+            Console.WriteLine($"[API] Content-Type: {Request.ContentType}");
+            Console.WriteLine($"[API] Request Headers:");
+            foreach (var header in Request.Headers)
+            {
+                Console.WriteLine($"  {header.Key}: {header.Value}");
+            }
+            Console.WriteLine("========================================");
+            // ===== END DEBUGGING =====
+
             var customerId = User.FindFirst("CustomerId")?.Value;
             if (string.IsNullOrEmpty(customerId))
             {
+                Console.WriteLine("[API] ❌ UNAUTHORIZED - No CustomerId in token");
                 return Unauthorized("Customer ID not found in token");
             }
 
             var user = await _userManager.FindByIdAsync(customerId);
             if (user == null)
             {
+                Console.WriteLine($"[API] ❌ NOT FOUND - User {customerId} not found");
                 return NotFound("User not found");
             }
 
-            if (string.IsNullOrWhiteSpace(request.FirstName) || string.IsNullOrWhiteSpace(request.LastName) ||
-                string.IsNullOrWhiteSpace(request.Email))
-            {
-                return BadRequest(new { success = false, message = "First name, last name, and email are required" });
-            }
+            Console.WriteLine($"[API] ✅ User found: {user.FullName} ({user.Id})");
 
-            user.FirstName = request.FirstName.Trim();
-            user.LastName = request.LastName.Trim();
-            user.Email = request.Email.Trim();
-            user.UserName = request.Email.Trim();
-            user.PhoneNumber = request.Phone?.Trim();
-
-            // Handle Profile Picture Upload
+            // Handle profile picture upload (SAME LOGIC AS ADMIN PROFILE)
             if (request.ProfilePicture != null && request.ProfilePicture.Length > 0)
             {
+                Console.WriteLine($"[API] 📷 Profile picture detected: {request.ProfilePicture.FileName} ({request.ProfilePicture.Length} bytes)");
+
                 var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
                 var fileExtension = Path.GetExtension(request.ProfilePicture.FileName).ToLowerInvariant();
 
@@ -159,20 +253,51 @@ namespace AdministratorWeb.Controllers.Api
                     }
 
                     user.ProfilePicturePath = $"/uploads/profiles/{fileName}";
+                    Console.WriteLine($"[API] ✅ Profile picture saved: {user.ProfilePicturePath}");
                 }
                 catch (Exception ex)
                 {
+                    Console.WriteLine($"[API] ❌ Error uploading profile picture: {ex.Message}");
                     return BadRequest(new { success = false, message = $"Error uploading profile picture: {ex.Message}" });
                 }
+            }
+
+            // Handle text fields - Only validate if they're provided (not empty/whitespace)
+            // This allows profile picture-only updates OR text field updates OR both
+            bool hasTextFields = !string.IsNullOrWhiteSpace(request.FirstName) ||
+                                 !string.IsNullOrWhiteSpace(request.LastName) ||
+                                 !string.IsNullOrWhiteSpace(request.Email);
+
+            if (hasTextFields)
+            {
+                // If any text field is provided, all required fields must be provided
+                if (string.IsNullOrWhiteSpace(request.FirstName) || string.IsNullOrWhiteSpace(request.LastName) ||
+                    string.IsNullOrWhiteSpace(request.Email))
+                {
+                    Console.WriteLine($"[API] ❌ VALIDATION FAILED:");
+                    Console.WriteLine($"  FirstName IsNullOrWhiteSpace: {string.IsNullOrWhiteSpace(request.FirstName)}");
+                    Console.WriteLine($"  LastName IsNullOrWhiteSpace: {string.IsNullOrWhiteSpace(request.LastName)}");
+                    Console.WriteLine($"  Email IsNullOrWhiteSpace: {string.IsNullOrWhiteSpace(request.Email)}");
+                    return BadRequest(new { success = false, message = "First name, last name, and email are required" });
+                }
+
+                Console.WriteLine("[API] ✅ Validation passed, updating text fields...");
+                user.FirstName = request.FirstName.Trim();
+                user.LastName = request.LastName.Trim();
+                user.Email = request.Email.Trim();
+                user.UserName = request.Email.Trim();
+                user.PhoneNumber = request.Phone?.Trim();
             }
 
             var result = await _userManager.UpdateAsync(user);
             if (result.Succeeded)
             {
+                Console.WriteLine($"[API] ✅ Profile updated successfully. ProfilePicturePath: {user.ProfilePicturePath}");
                 return Ok(new { success = true, message = "Profile updated successfully", profilePicturePath = user.ProfilePicturePath });
             }
 
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            Console.WriteLine($"[API] ❌ Update failed: {errors}");
             return BadRequest(new { success = false, message = errors });
         }
     }
