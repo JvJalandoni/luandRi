@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AdministratorWeb.Data;
 using AdministratorWeb.Models;
+using AdministratorWeb.Services;
 using System.Security.Claims;
 
 namespace AdministratorWeb.Controllers
@@ -21,6 +22,7 @@ namespace AdministratorWeb.Controllers
         {
             _context = context;
             _logger = logger;
+            
         }
 
         /// <summary>
@@ -129,10 +131,11 @@ namespace AdministratorWeb.Controllers
                     _context.Rooms.Add(room);
                     await _context.SaveChangesAsync();
 
+
                     TempData["Success"] = $"Room '{room.Name}' created successfully.";
-                    _logger.LogInformation("Room created: {RoomName} by user {UserId}", 
+                    _logger.LogInformation("Room created: {RoomName} by user {UserId}",
                         room.Name, room.CreatedBy);
-                    
+
                     return RedirectToAction(nameof(Index));
                 }
             }
@@ -191,12 +194,21 @@ namespace AdministratorWeb.Controllers
                     // Check for duplicate room name (excluding current room)
                     var existingRoom = await _context.Rooms
                         .FirstOrDefaultAsync(r => r.Name.ToLower() == room.Name.ToLower() && r.Id != id);
-                    
+
                     if (existingRoom != null)
                     {
                         ModelState.AddModelError("Name", "A room with this name already exists.");
                         return View(room);
                     }
+
+                    // Get old values for audit logging
+                    var originalRoom = await _context.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id);
+                    var oldValues = originalRoom != null ? new
+                    {
+                        originalRoom.Name,
+                        originalRoom.Description,
+                        originalRoom.IsActive
+                    } : null;
 
                     // Update audit fields
                     room.UpdatedAt = DateTime.UtcNow;
@@ -205,10 +217,11 @@ namespace AdministratorWeb.Controllers
                     _context.Update(room);
                     await _context.SaveChangesAsync();
 
+
                     TempData["Success"] = $"Room '{room.Name}' updated successfully.";
-                    _logger.LogInformation("Room updated: {RoomName} by user {UserId}", 
+                    _logger.LogInformation("Room updated: {RoomName} by user {UserId}",
                         room.Name, room.UpdatedBy);
-                    
+
                     return RedirectToAction(nameof(Index));
                 }
             }

@@ -87,12 +87,8 @@
                                     data-search="@user.FullName.ToLower() @(user.Email?.ToLower() ?? "") @(user.RoomName?.ToLower() ?? "")">
                                     <td class="px-6 py-4">
                                         <div class="flex items-center gap-3">
-                                            <div class="relative">
-                                                <div class="w-10 h-10 bg-gradient-to-br from-brand-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg flex-shrink-0 @(!user.IsActive ? "opacity-50" : "")">
-                                                    <span class="text-white font-bold text-sm">
-                                                        @user.FirstName.Substring(0, 1).ToUpper()
-                                                    </span>
-                                                </div>
+                                            <div class="relative @(!user.IsActive ? "opacity-50" : "")">
+                                                @await Component.InvokeAsync("UserAvatar", new { userId = user.Id, userName = user.FullName, size = "w-10 h-10", textSize = "text-sm" })
                                                 @if (!user.IsActive)
                                                 {
                                                     <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-slate-800 flex items-center justify-center" title="Inactive user">

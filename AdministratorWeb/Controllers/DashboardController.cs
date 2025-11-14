@@ -15,14 +15,13 @@ namespace AdministratorWeb.Controllers
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IRobotManagementService _robotService;
-        private readonly IAuditService _auditService;
 
-        public DashboardController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, IRobotManagementService robotService, IAuditService auditService)
+        public DashboardController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, IRobotManagementService robotService)
         {
             _context = context;
             _userManager = userManager;
             _robotService = robotService;
-            _auditService = auditService;
+            
         }
 
         public async Task<IActionResult> Index()
@@ -205,23 +204,6 @@ namespace AdministratorWeb.Controllers
                 await _context.SaveChangesAsync();
 
                 // Log to audit trail
-                await _auditService.LogAsync(
-                    AuditActionType.SettingsUpdated,
-                    "System settings updated",
-                    "LaundrySettings",
-                    settings?.Id.ToString() ?? "1",
-                    "System Configuration",
-                    oldValues: oldSettings,
-                    newValues: new {
-                        model.RatePerKg,
-                        model.CompanyName,
-                        model.DetectionMode,
-                        model.MaxWeightPerRequest,
-                        model.MinWeightPerRequest,
-                        model.AutoAcceptRequests,
-                        model.RoomArrivalTimeoutMinutes
-                    }
-                );
 
                 TempData["Success"] = "Settings updated successfully.";
             }

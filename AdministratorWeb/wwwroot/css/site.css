@@ -12,6 +12,87 @@
     --border-color: #2a2d3a;
 }
 
+/* Light Mode Variables */
+html.light-mode {
+    --bg-dark: #f8f9fa;
+    --primary-blue: #0284c7;
+    --success-green: #10b981;
+    --danger-red: #ef4444;
+    --warning-yellow: #f59e0b;
+    --text-light: #1f2937;
+    --text-muted: #6b7280;
+    --bg-card: #ffffff;
+    --bg-sidebar: #ffffff;
+    --border-color: #e5e7eb;
+}
+
+/* Light mode specific styles */
+html.light-mode body {
+    background-color: #f3f4f6;
+}
+
+html.light-mode .bg-slate-900\/80 {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+html.light-mode .bg-slate-800\/50,
+html.light-mode .bg-slate-800\/40,
+html.light-mode .bg-slate-800\/95 {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+html.light-mode .bg-slate-700\/50,
+html.light-mode .bg-slate-700\/30 {
+    background-color: rgba(243, 244, 246, 0.8) !important;
+}
+
+html.light-mode .text-slate-300,
+html.light-mode .text-slate-400 {
+    color: #6b7280 !important;
+}
+
+html.light-mode .text-white {
+    color: #1f2937 !important;
+}
+
+html.light-mode .border-slate-700\/30,
+html.light-mode .border-slate-700\/40,
+html.light-mode .border-slate-700\/50 {
+    border-color: #e5e7eb !important;
+}
+
+html.light-mode .border-slate-600\/40,
+html.light-mode .border-slate-600\/50 {
+    border-color: #d1d5db !important;
+}
+
+html.light-mode .hover\:bg-slate-700\/50:hover {
+    background-color: rgba(243, 244, 246, 0.8) !important;
+}
+
+html.light-mode .hover\:text-white:hover {
+    color: #1f2937 !important;
+}
+
+html.light-mode .bg-dark-custom {
+    background-color: #f8f9fa !important;
+}
+
+html.light-mode [style*="background-color: var(--bg-dark)"],
+html.light-mode [style*="background-color:var(--bg-dark)"] {
+    background-color: #f8f9fa !important;
+}
+
+html.light-mode [style*="color: var(--text-light)"],
+html.light-mode [style*="color:var(--text-light)"] {
+    color: #1f2937 !important;
+}
+
+html.light-mode [style*="border-color: var(--border-color)"],
+html.light-mode [style*="border-color:var(--border-color)"] {
+    border-color: #e5e7eb !important;
+}
+
 html {
     font-size: 14px;
     height: 100%;

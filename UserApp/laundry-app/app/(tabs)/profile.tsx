@@ -7,7 +7,10 @@ import {
         TextInput,
         TouchableOpacity,
         View,
+        Image,
+        ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useCustomAlert } from '../../components/CustomAlert';
 import { ThemedText } from '../../components/ThemedText';
 import { ThemedView } from '../../components/ThemedView';
@@ -37,6 +40,9 @@ export default function ProfileScreen() {
         const [email, setEmail] = useState('');
         const [phone, setPhone] = useState('');
         const [isLoading, setIsLoading] = useState(false);
+        const [profilePicturePath, setProfilePicturePath] = useState<string | null>(null);
+        const [selectedImage, setSelectedImage] = useState<{uri: string; name: string; type: string} | null>(null);
+        const [isUploadingImage, setIsUploadingImage] = useState(false);
 
         const backgroundColor = useThemeColor({}, 'background');
         const textColor = useThemeColor({}, 'text');
@@ -70,6 +76,7 @@ export default function ProfileScreen() {
                         setLastName(profile.lastName);
                         setEmail(profile.email);
                         setPhone(profile.phone || '');
+                        setProfilePicturePath(profile.profilePicturePath || null);
                 } catch (error) {
                         // If profile doesn't exist, use user data from auth
                         if (user) {
@@ -77,6 +84,38 @@ export default function ProfileScreen() {
                                 setFirstName(first || '');
                                 setLastName(lastParts.join(' ') || '');
                         }
+                }
+        };
+
+        const handlePickImage = async () => {
+                try {
+                        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+                        if (permissionResult.granted === false) {
+                                showAlert('Permission Required', 'Please allow access to your photo library to upload a profile picture');
+                                return;
+                        }
+
+                        const result = await ImagePicker.launchImageLibraryAsync({
+                                mediaTypes: ['images'],
+                                allowsEditing: true,
+                                aspect: [1, 1],
+                                quality: 0.8,
+                        });
+
+                        if (!result.canceled && result.assets[0]) {
+                                const asset = result.assets[0];
+                                const fileName = asset.uri.split('/').pop() || 'profile.jpg';
+                                const type = `image/${fileName.split('.').pop() || 'jpeg'}`;
+
+                                setSelectedImage({
+                                        uri: asset.uri,
+                                        name: fileName,
+                                        type: type,
+                                });
+                        }
+                } catch (error) {
+                        showAlert('Error', 'Failed to pick image');
                 }
         };
 
@@ -88,13 +127,20 @@ export default function ProfileScreen() {
 
                 setIsLoading(true);
                 try {
-                        await userService.updateProfile({
+                        const result = await userService.updateProfile({
                                 firstName: firstName.trim(),
                                 lastName: lastName.trim(),
                                 email: email.trim(),
-                                phone: phone.trim() || undefined, // Don't send empty string
+                                phone: phone.trim() || undefined,
+                                profilePicture: selectedImage || undefined,
                         });
 
+                        // Update profile picture path if returned
+                        if (result.profilePicturePath) {
+                                setProfilePicturePath(result.profilePicturePath);
+                        }
+
+                        setSelectedImage(null); // Clear selected image
                         await refreshProfile(); // Refresh to show updated data
                         showAlert('Success', 'Profile updated successfully');
                         setIsEditing(false);
@@ -107,6 +153,7 @@ export default function ProfileScreen() {
 
         const handleCancel = () => {
                 setIsEditing(false);
+                setSelectedImage(null); // Clear any selected image
                 loadProfile(); // Reset to original values
         };
 
@@ -138,13 +185,30 @@ export default function ProfileScreen() {
                 <ThemedView style={styles.container}>
                         <ScrollView style={styles.scrollContainer}>
                                 <View style={styles.header}>
-                                        <View style={[styles.avatar, { backgroundColor: primaryColor }]}>
-                                                <Text style={styles.avatarText}>
-                                                        {firstName.charAt(0)}{lastName.charAt(0)}
-                                                </Text>
-                                        </View>
+                                        <TouchableOpacity onPress={handlePickImage} style={styles.avatarContainer}>
+                                                <View style={[styles.avatar, { backgroundColor: primaryColor }]}>
+                                                        {(selectedImage || profilePicturePath) ? (
+                                                                <Image
+                                                                        source={{ uri: selectedImage?.uri || `http://140.245.51.90:23000${profilePicturePath}` }}
+                                                                        style={styles.avatarImage}
+                                                                />
+                                                        ) : (
+                                                                <Text style={styles.avatarText}>
+                                                                        {firstName.charAt(0)}{lastName.charAt(0)}
+                                                                </Text>
+                                                        )}
+                                                </View>
+                                                <View style={[styles.cameraIcon, { backgroundColor: primaryColor }]}>
+                                                        <Text style={styles.cameraIconText}>📷</Text>
+                                                </View>
+                                        </TouchableOpacity>
                                         <ThemedText style={styles.userName}>{user?.customerName || 'User'}</ThemedText>
                                         <ThemedText style={[styles.userId, { color: mutedColor }]}>ID: {user?.customerId || 'N/A'}</ThemedText>
+                                        {selectedImage && (
+                                                <ThemedText style={[styles.imageSelected, { color: primaryColor }]}>
+                                                        New photo selected - Save to upload
+                                                </ThemedText>
+                                        )}
                                 </View>
 
                                 <View style={[styles.section, { backgroundColor: cardColor }]}>
@@ -286,18 +350,46 @@ const styles = StyleSheet.create({
                 padding: 32,
                 paddingTop: 60,
         },
+        avatarContainer: {
+                position: 'relative',
+                marginBottom: 16,
+        },
         avatar: {
                 width: 80,
                 height: 80,
                 borderRadius: 40,
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginBottom: 16,
+                overflow: 'hidden',
+        },
+        avatarImage: {
+                width: '100%',
+                height: '100%',
         },
         avatarText: {
                 fontSize: 28,
                 fontWeight: 'bold',
                 color: '#ffffff',
+        },
+        cameraIcon: {
+                position: 'absolute',
+                bottom: 0,
+                right: 0,
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 2,
+                borderColor: '#ffffff',
+        },
+        cameraIconText: {
+                fontSize: 14,
+        },
+        imageSelected: {
+                fontSize: 12,
+                marginTop: 4,
+                fontWeight: '500',
         },
         userName: {
                 fontSize: 24,

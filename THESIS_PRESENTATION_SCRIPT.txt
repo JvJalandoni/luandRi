@@ -65,21 +65,20 @@ VISUAL CONTENT:
 ---------------
 THE CHALLENGE:
 • Manual laundry services require constant human coordination
-• Students/residents waste time waiting for pickup/delivery
-• Service providers struggle with fleet management and scheduling
-• No real-time tracking or automated routing
+• Students/residents using time waiting for pickup/delivery
+• Service providers struggle with scheduling or reminding customers that their laundry is finished
+• No real-time tracking or automated management
 
 THE OPPORTUNITY:
 • Autonomous robots can handle repetitive logistics tasks
 • IoT and mobile technology enable seamless customer experience
-• Computer vision makes indoor navigation affordable and reliable
+• Line following using Computer vision makes indoor navigation affordable and reliable
 
 SCRIPT:
 -------
-"Let me start by setting the context. In many institutions—dormitories, hotels,
-hospitals—laundry services are essential but operationally complex. Traditional
+"Let me start by setting the context. In many institutions—dormitories, hotels, apartments laundry services are essential but operationally complex. Traditional
 systems require manual coordination: customers call to request pickup, staff
-manually schedule routes, and there's no visibility into the process.
+manually schedule, and there's no visibility into the process.
 
 Our opportunity here is clear: autonomous robotics combined with modern IoT
 technology can transform this into a seamless, automated service. The robot
@@ -97,10 +96,10 @@ VISUAL CONTENT:
 How can we design and implement an autonomous robotic system
 that can:
 
-✓ Navigate indoor environments reliably and cost-effectively
+✓ Navigate indoor environments reliably and cost-effectively just by putting lines on the floor
 ✓ Locate customer rooms accurately
 ✓ Handle laundry collection and delivery autonomously
-✓ Integrate with payment systems and mobile applications
+✓ Integrate with mobile applications
 ✓ Scale to manage multiple robots and concurrent requests
 
 WHILE maintaining:
@@ -116,7 +115,7 @@ request to delivery—while being safe, scalable, and user-friendly?
 
 The key challenges are navigation in indoor environments, accurate room
 location, integration with business systems like payments, and providing a
-seamless experience through mobile and web interfaces. These are the technical
+great experience through mobile and web interfaces. These are the technical
 and practical problems this thesis addresses."
 
 DURATION: 40 seconds
@@ -218,7 +217,7 @@ LIMITATIONS (Technical Constraints):
 
 DELIMITATIONS (Intentional Boundaries):
 • Study limited to single-floor environments
-• Focus on dormitory/hotel use cases only
+• Focus on dormitory/hotel/hallway based home systems with laundry installed in the buildings use cases only
 • Manual laundry loading/unloading by humans
 • Testing conducted in controlled indoor environments
 • Limited to 1-2 robot prototypes for validation
@@ -498,7 +497,7 @@ turning motions. An HC-SR04 ultrasonic sensor provides obstacle detection up to
 4 meters away.
 
 For laundry weight measurement, we use an HX711 load cell amplifier connected to
-a 50kg capacity load cell, giving us precision down to 0.1 grams—more than
+a 20kg capacity load cell CURRENTLY BROKEN, but it used to give us precision down to 0.1 grams—more than
 sufficient for pricing calculations.
 
 The camera module captures frames at 5 FPS for line detection, and a USB
@@ -845,8 +844,7 @@ SCRIPT:
 per second.
 
 Every second, each robot sends a data-exchange packet containing its current
-location, detected beacons, line-following error metrics, weight sensor reading,
-battery level, and obstacle distance.
+location, detected beacons, line-following error metrics, weight sensor reading, and obstacle distance.
 
 The server responds with commands: which request is assigned, what the target
 location is, and what command to execute—whether that's navigating to a room,
@@ -869,7 +867,7 @@ SLIDE 21: TESTING & VALIDATION
 VISUAL CONTENT:
 ---------------
 UNIT TESTING:
-✓ Line detection algorithm (50+ test cases)
+✓ Line detection algorithm (100+ test cases)
 ✓ PID controller tuning (error convergence)
 ✓ Beacon RSSI distance estimation
 ✓ Payment calculation accuracy
@@ -906,9 +904,9 @@ communication maintains low latency even under load, the mobile app correctly
 handles authentication and API calls, and the database handles concurrent
 requests without conflicts.
 
-System testing involved real-world scenarios with 20 volunteer participants
+System testing involved real-world scenarios with 5 volunteer participants
 creating actual requests. We tested multi-robot coordination with up to 5
-concurrent requests, validated obstacle avoidance in dynamic environments, and
+concurrent requests, validated obstacle detection in dynamic environments, and
 confirmed the system recovers gracefully from network failures.
 
 Our key performance metrics: 95% navigation success rate, 98% room detection
@@ -1288,7 +1286,7 @@ Q2: "How do you handle obstacle avoidance?"
 ANSWER:
 "We use an HC-SR04 ultrasonic sensor mounted on the front of the robot, which
 detects obstacles from 2 to 400 centimeters away. The robot continuously polls
-this sensor, and if it detects an object within 30 centimeters, it immediately
+this sensor, and if it detects an object within 14 centimeters, it immediately
 stops moving and waits.
 
 The logic is simple: if the obstacle moves—like a person walking by—the robot

@@ -104,7 +104,6 @@ builder.Services.AddHostedService<RequestTimeoutService>();
 builder.Services.AddHttpContextAccessor();
 
 // Register audit service
-builder.Services.AddScoped<IAuditService, AuditService>();
 
 // Configure lowercase URLs
 builder.Services.AddRouting(options =>

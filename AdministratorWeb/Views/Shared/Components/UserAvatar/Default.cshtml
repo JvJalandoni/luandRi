@@ -1,0 +1,12 @@
+@model AdministratorWeb.ViewComponents.UserAvatarViewModel
+
+<div class="@Model.Size rounded-full overflow-hidden bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+    @if (!string.IsNullOrEmpty(Model.ProfilePicturePath))
+    {
+        <img src="@Model.ProfilePicturePath" alt="Profile" class="w-full h-full object-cover">
+    }
+    else
+    {
+        <span class="text-white font-semibold @Model.TextSize">@Model.Initials</span>
+    }
+</div>
