@@ -1319,9 +1319,30 @@ namespace AdministratorWeb.Controllers
         /// </summary>
         public async Task<IActionResult> AccountingLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
         {
+            // Start with base query
+            var query = _context.AccountingActionLogs.AsQueryable();
+
+            // Apply search filter
+            if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                query = query.Where(l =>
+                    l.CustomerName.Contains(searchQuery) ||
+                    l.CustomerId.Contains(searchQuery) ||
+                    (l.PerformedByUserName != null && l.PerformedByUserName.Contains(searchQuery)) ||
+                    (l.PerformedByUserEmail != null && l.PerformedByUserEmail.Contains(searchQuery)) ||
+                    (l.PaymentId.HasValue && l.PaymentId.ToString().Contains(searchQuery)) ||
+                    (l.LaundryRequestId.HasValue && l.LaundryRequestId.ToString().Contains(searchQuery)) ||
+                    (l.AdjustmentId.HasValue && l.AdjustmentId.ToString().Contains(searchQuery)));
+            }
+
+            // Apply action filter
+            if (!string.IsNullOrWhiteSpace(action))
+            {
+                query = query.Where(l => l.Action == action);
+            }
+
             // Order by most recent first
-            var query = _context.AccountingActionLogs
-                .OrderByDescending(l => l.ActionedAt);
+            query = query.OrderByDescending(l => l.ActionedAt);
 
             // Get total count for pagination
             var totalCount = await query.CountAsync();
