@@ -43,6 +43,7 @@ namespace AdministratorWeb.Controllers
             var memberUserIds = await _context.UserRoles
                 .Where(ur => ur.RoleId == memberRoleId)
                 .Select(ur => ur.UserId)
+                .Distinct()
                 .ToListAsync();
 
             // Simple direct query - fetch ALL members regardless of IsActive
@@ -51,6 +52,12 @@ namespace AdministratorWeb.Controllers
                 .OrderBy(u => u.FirstName)
                 .ThenBy(u => u.LastName)
                 .ToListAsync();
+
+            // DEBUG LOG
+            _logger.LogWarning("CUSTOMER DROPDOWN DEBUG: Found {Count} customers. IDs: {Ids}. Names: {Names}",
+                customers.Count,
+                string.Join(", ", customers.Select(c => c.Id)),
+                string.Join(", ", customers.Select(c => $"{c.FullName}[{c.Email}][Active:{c.IsActive}]")));
 
             var dto = new RequestsIndexDto
             {
