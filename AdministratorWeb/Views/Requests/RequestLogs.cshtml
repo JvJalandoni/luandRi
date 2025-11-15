@@ -100,14 +100,9 @@
 </div>
 
 <!-- Results Summary -->
-<div class="mb-6 px-4 py-3 bg-blue-900/30 border border-blue-700/50 rounded-xl text-blue-300 animate-slide-up" style="animation-delay: 0.2s;">
-    <div class="flex items-center">
-        <i data-lucide="info" class="w-5 h-5 mr-3"></i>
-        <div>
-            <div>Showing <span class="font-bold mx-1">@Model.Count()</span> of <span class="font-bold mx-1">@totalCount</span> total log entries</div>
-            <div class="text-xs text-yellow-300 mt-1">DEBUG: Model type: @Model.GetType().Name, Model is null: @(Model == null), Model count: @Model.Count()</div>
-        </div>
-    </div>
+<div class="mb-6 px-4 py-3 bg-blue-900/30 border border-blue-700/50 rounded-xl text-blue-300 flex items-center animate-slide-up" style="animation-delay: 0.2s;">
+    <i data-lucide="info" class="w-5 h-5 mr-3"></i>
+    Showing <span class="font-bold mx-1">@Model.Count()</span> of <span class="font-bold mx-1">@totalCount</span> total log entries
 </div>
 
 <!-- Logs Timeline -->

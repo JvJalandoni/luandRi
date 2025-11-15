@@ -291,6 +291,28 @@ namespace AdministratorWeb.Controllers
 
             request.IsPaid = true;
 
+            // Create audit log
+            var adminUser = userId != null ? await _context.Users.FindAsync(userId) : null;
+            var log = new AccountingActionLog
+            {
+                Action = "MarkPaid",
+                PaymentId = paymentToReceipt.Id,
+                LaundryRequestId = requestId,
+                CustomerId = request.CustomerId,
+                CustomerName = request.CustomerName,
+                Amount = request.TotalCost!.Value,
+                OldStatus = existingPayment != null ? "Pending" : null,
+                NewStatus = "Completed",
+                PaymentMethod = paymentMethod.ToString(),
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                ActionedAt = DateTime.UtcNow,
+                Notes = notes
+            };
+            _context.AccountingActionLogs.Add(log);
+
             // Auto-generate receipt (for record keeping)
             try
             {
@@ -408,6 +430,29 @@ namespace AdministratorWeb.Controllers
             };
 
             _context.Payments.Add(payment);
+
+            // Create audit log
+            var adminUser = userId != null ? await _context.Users.FindAsync(userId) : null;
+            var log = new AccountingActionLog
+            {
+                Action = "MarkPending",
+                PaymentId = payment.Id,
+                LaundryRequestId = requestId,
+                CustomerId = request.CustomerId,
+                CustomerName = request.CustomerName,
+                Amount = request.TotalCost!.Value,
+                OldStatus = null,
+                NewStatus = "Pending",
+                PaymentMethod = PaymentMethod.Cash.ToString(),
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                ActionedAt = DateTime.UtcNow,
+                Notes = notes
+            };
+            _context.AccountingActionLogs.Add(log);
+
             await _context.SaveChangesAsync();
 
             TempData["Success"] = "Payment marked as pending.";
@@ -424,12 +469,38 @@ namespace AdministratorWeb.Controllers
                 return RedirectToAction(nameof(Payments));
             }
 
+            var oldStatus = payment.Status.ToString();
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var adminUser = userId != null ? await _context.Users.FindAsync(userId) : null;
+
             payment.Status = PaymentStatus.Failed;
             payment.FailureReason = failureReason;
             if (!string.IsNullOrEmpty(notes))
             {
                 payment.Notes = (payment.Notes ?? "") + $"\nFailed: {notes}";
             }
+
+            // Create audit log
+            var log = new AccountingActionLog
+            {
+                Action = "MarkFailed",
+                PaymentId = paymentId,
+                LaundryRequestId = payment.LaundryRequestId,
+                CustomerId = payment.CustomerId,
+                CustomerName = payment.CustomerName,
+                Amount = payment.Amount,
+                OldStatus = oldStatus,
+                NewStatus = "Failed",
+                PaymentMethod = payment.Method.ToString(),
+                Reason = failureReason,
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                ActionedAt = DateTime.UtcNow,
+                Notes = notes
+            };
+            _context.AccountingActionLogs.Add(log);
 
             await _context.SaveChangesAsync();
 
@@ -447,7 +518,9 @@ namespace AdministratorWeb.Controllers
                 return RedirectToAction(nameof(Payments));
             }
 
+            var oldStatus = payment.Status.ToString();
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var adminUser = userId != null ? await _context.Users.FindAsync(userId) : null;
 
             payment.Status = PaymentStatus.Cancelled;
             payment.CancelledAt = DateTime.UtcNow;
@@ -457,6 +530,28 @@ namespace AdministratorWeb.Controllers
             {
                 payment.Notes = (payment.Notes ?? "") + $"\nCancelled: {notes}";
             }
+
+            // Create audit log
+            var log = new AccountingActionLog
+            {
+                Action = "Cancel",
+                PaymentId = paymentId,
+                LaundryRequestId = payment.LaundryRequestId,
+                CustomerId = payment.CustomerId,
+                CustomerName = payment.CustomerName,
+                Amount = payment.Amount,
+                OldStatus = oldStatus,
+                NewStatus = "Cancelled",
+                PaymentMethod = payment.Method.ToString(),
+                Reason = cancellationReason,
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                ActionedAt = DateTime.UtcNow,
+                Notes = notes
+            };
+            _context.AccountingActionLogs.Add(log);
 
             await _context.SaveChangesAsync();
 
@@ -606,6 +701,27 @@ namespace AdministratorWeb.Controllers
             };
 
             _context.PaymentAdjustments.Add(adjustment);
+
+            // Create audit log
+            var adminUser = userId != null ? await _context.Users.FindAsync(userId) : null;
+            var log = new AccountingActionLog
+            {
+                Action = "CreateAdjustment",
+                AdjustmentId = adjustment.Id,
+                CustomerId = "N/A", // Adjustments aren't customer-specific
+                CustomerName = "System Adjustment",
+                Amount = amount,
+                AdjustmentType = type.ToString(),
+                Reason = description,
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName ?? userName,
+                PerformedByUserEmail = adminUser?.Email,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                ActionedAt = DateTime.UtcNow,
+                Notes = notes
+            };
+            _context.AccountingActionLogs.Add(log);
+
             await _context.SaveChangesAsync();
 
             TempData["Success"] = "Adjustment created successfully.";
@@ -621,6 +737,28 @@ namespace AdministratorWeb.Controllers
                 TempData["Error"] = "Adjustment not found.";
                 return RedirectToAction(nameof(Adjustments));
             }
+
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var adminUser = userId != null ? await _context.Users.FindAsync(userId) : null;
+
+            // Create audit log before deleting
+            var log = new AccountingActionLog
+            {
+                Action = "DeleteAdjustment",
+                AdjustmentId = id,
+                CustomerId = "N/A", // Adjustments aren't customer-specific
+                CustomerName = "System Adjustment",
+                Amount = adjustment.Amount,
+                AdjustmentType = adjustment.Type.ToString(),
+                Reason = adjustment.Description,
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                ActionedAt = DateTime.UtcNow,
+                Notes = $"Deleted adjustment: {adjustment.Description} (Ref: {adjustment.ReferenceNumber})"
+            };
+            _context.AccountingActionLogs.Add(log);
 
             _context.PaymentAdjustments.Remove(adjustment);
             await _context.SaveChangesAsync();
