@@ -1328,6 +1328,44 @@ namespace AdministratorWeb.Controllers
         }
 
         /// <summary>
+        /// Test endpoint to verify audit logging works
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> TestAuditLog()
+        {
+            try
+            {
+                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var adminUser = userId != null ? await _context.Users.FindAsync(userId) : null;
+
+                var testLog = new AccountingActionLog
+                {
+                    Action = "TestLog",
+                    CustomerId = "TEST-123",
+                    CustomerName = "Test Customer",
+                    Amount = 99.99m,
+                    OldStatus = "None",
+                    NewStatus = "Test",
+                    PerformedByUserId = userId,
+                    PerformedByUserName = adminUser?.FullName ?? "Unknown",
+                    PerformedByUserEmail = adminUser?.Email ?? "test@test.com",
+                    Details = "This is a test log entry to verify audit logging works",
+                    ActionedAt = DateTime.UtcNow,
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+                };
+
+                _context.AccountingActionLogs.Add(testLog);
+                var saved = await _context.SaveChangesAsync();
+
+                return Content($"SUCCESS! Saved {saved} record(s). Test log ID: {testLog.Id}. Now go to /accounting/auditlogs to see it.");
+            }
+            catch (Exception ex)
+            {
+                return Content($"ERROR: {ex.Message}\n\nStack Trace:\n{ex.StackTrace}\n\nInner Exception: {ex.InnerException?.Message}");
+            }
+        }
+
+        /// <summary>
         /// View accounting audit logs with pagination and filtering
         /// </summary>
         public async Task<IActionResult> AuditLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
