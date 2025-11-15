@@ -985,28 +985,9 @@ namespace AdministratorWeb.Controllers
         /// </summary>
         public async Task<IActionResult> RequestLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
         {
-            var query = _context.RequestActionLogs.AsQueryable();
-
-            // Search by customer name, request ID, or admin name
-            if (!string.IsNullOrEmpty(searchQuery))
-            {
-                var search = searchQuery.Trim().ToLower();
-                bool isNumeric = int.TryParse(search, out int requestId);
-
-                query = query.Where(l =>
-                    l.CustomerName.ToLower().Contains(search) ||
-                    (l.PerformedByUserName != null && l.PerformedByUserName.ToLower().Contains(search)) ||
-                    (isNumeric && l.RequestId == requestId));
-            }
-
-            // Filter by action type
-            if (!string.IsNullOrEmpty(action))
-            {
-                query = query.Where(l => l.Action == action);
-            }
-
             // Order by most recent first
-            query = query.OrderByDescending(l => l.ActionedAt);
+            var query = _context.RequestActionLogs
+                .OrderByDescending(l => l.ActionedAt);
 
             // Get total count for pagination
             var totalCount = await query.CountAsync();
