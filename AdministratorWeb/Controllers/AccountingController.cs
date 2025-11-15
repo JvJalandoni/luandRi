@@ -1309,45 +1309,75 @@ namespace AdministratorWeb.Controllers
         /// </summary>
         public async Task<IActionResult> AuditLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
         {
-            var query = _context.AccountingActionLogs.AsQueryable();
-
-            // Apply search filter
-            if (!string.IsNullOrWhiteSpace(searchQuery))
+            try
             {
-                query = query.Where(l =>
-                    (l.CustomerName != null && l.CustomerName.Contains(searchQuery)) ||
-                    (l.CustomerId != null && l.CustomerId.Contains(searchQuery)) ||
-                    (l.PerformedByUserName != null && l.PerformedByUserName.Contains(searchQuery)) ||
-                    (l.PerformedByUserEmail != null && l.PerformedByUserEmail.Contains(searchQuery)));
-            }
+                // DEBUG: Check total count in database
+                var totalInDb = await _context.AccountingActionLogs.CountAsync();
+                ViewBag.DebugTotalInDb = totalInDb;
 
-            // Apply action filter
-            if (!string.IsNullOrWhiteSpace(action))
+                var query = _context.AccountingActionLogs.AsQueryable();
+
+                // Apply search filter
+                if (!string.IsNullOrWhiteSpace(searchQuery))
+                {
+                    ViewBag.DebugSearchApplied = true;
+                    query = query.Where(l =>
+                        (l.CustomerName != null && l.CustomerName.Contains(searchQuery)) ||
+                        (l.CustomerId != null && l.CustomerId.Contains(searchQuery)) ||
+                        (l.PerformedByUserName != null && l.PerformedByUserName.Contains(searchQuery)) ||
+                        (l.PerformedByUserEmail != null && l.PerformedByUserEmail.Contains(searchQuery)));
+                }
+                else
+                {
+                    ViewBag.DebugSearchApplied = false;
+                }
+
+                // Apply action filter
+                if (!string.IsNullOrWhiteSpace(action))
+                {
+                    ViewBag.DebugActionFilterApplied = true;
+                    query = query.Where(l => l.Action == action);
+                }
+                else
+                {
+                    ViewBag.DebugActionFilterApplied = false;
+                }
+
+                // Order by most recent first
+                query = query.OrderByDescending(l => l.ActionedAt);
+
+                // Get total count for pagination
+                var totalCount = await query.CountAsync();
+                var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                // Get current page
+                var logs = await query
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                ViewBag.SearchQuery = searchQuery ?? "";
+                ViewBag.CurrentAction = action ?? "";
+                ViewBag.CurrentPage = page;
+                ViewBag.TotalPages = totalPages;
+                ViewBag.PageSize = pageSize;
+                ViewBag.TotalCount = totalCount;
+                ViewBag.DebugException = null;
+
+                return View(logs);
+            }
+            catch (Exception ex)
             {
-                query = query.Where(l => l.Action == action);
+                ViewBag.DebugException = ex.Message + " | " + ex.StackTrace;
+                ViewBag.SearchQuery = "";
+                ViewBag.CurrentAction = "";
+                ViewBag.CurrentPage = 1;
+                ViewBag.TotalPages = 0;
+                ViewBag.PageSize = pageSize;
+                ViewBag.TotalCount = 0;
+                ViewBag.DebugTotalInDb = -1;
+                return View(new List<AccountingActionLog>());
             }
-
-            // Order by most recent first
-            query = query.OrderByDescending(l => l.ActionedAt);
-
-            // Get total count for pagination
-            var totalCount = await query.CountAsync();
-            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-
-            // Get current page
-            var logs = await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            ViewBag.SearchQuery = searchQuery ?? "";
-            ViewBag.CurrentAction = action ?? "";
-            ViewBag.CurrentPage = page;
-            ViewBag.TotalPages = totalPages;
-            ViewBag.PageSize = pageSize;
-            ViewBag.TotalCount = totalCount;
-
-            return View(logs);
         }
 
     }

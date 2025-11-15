@@ -217,8 +217,24 @@
         </div>
     }
 
+    <!-- Debug Info -->
+    <div class="alert alert-info mt-4">
+        <h6>🔍 DEBUG INFO:</h6>
+        <ul>
+            <li><strong>Total logs in database:</strong> @(ViewBag.DebugTotalInDb ?? "Unknown")</li>
+            <li><strong>Search filter applied:</strong> @(ViewBag.DebugSearchApplied?.ToString() ?? "Unknown")</li>
+            <li><strong>Action filter applied:</strong> @(ViewBag.DebugActionFilterApplied?.ToString() ?? "Unknown")</li>
+            <li><strong>Total after filters:</strong> @totalCount</li>
+            <li><strong>Results on this page:</strong> @Model.Count()</li>
+            @if (ViewBag.DebugException != null)
+            {
+                <li class="text-danger"><strong>EXCEPTION:</strong> @ViewBag.DebugException</li>
+            }
+        </ul>
+    </div>
+
     <!-- Version Number -->
     <div class="text-center mt-4">
-        <small class="text-muted">Audit Logs Page Version: <strong>1.3</strong> | Last Updated: @DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") UTC</small>
+        <small class="text-muted">Audit Logs Page Version: <strong>1.4</strong> | Last Updated: @DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") UTC</small>
     </div>
 </div>
