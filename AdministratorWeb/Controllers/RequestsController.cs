@@ -985,91 +985,47 @@ namespace AdministratorWeb.Controllers
         /// </summary>
         public async Task<IActionResult> RequestLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
         {
-            try
+            var query = _context.RequestActionLogs.AsQueryable();
+
+            // Search by customer name, request ID, or admin name
+            if (!string.IsNullOrEmpty(searchQuery))
             {
-                var query = _context.RequestActionLogs.AsQueryable();
+                var search = searchQuery.Trim().ToLower();
+                bool isNumeric = int.TryParse(search, out int requestId);
 
-                // Debug: Get total count before filtering
-                var totalLogsInDb = await _context.RequestActionLogs.CountAsync();
-                _logger.LogInformation("RequestLogs accessed. Total logs in database: {Count}. SearchQuery: '{SearchQuery}', Action: '{Action}'",
-                    totalLogsInDb, searchQuery ?? "NULL", action ?? "NULL");
-
-                // Debug: Log first few records to see what's in there
-                var sampleLogs = await _context.RequestActionLogs.Take(3).ToListAsync();
-                foreach (var log in sampleLogs)
-                {
-                    _logger.LogInformation("Sample log - ID: {Id}, RequestId: {RequestId}, Customer: {Customer}, Action: {Action}, Performer: {Performer}",
-                        log.Id, log.RequestId, log.CustomerName, log.Action, log.PerformedByUserName ?? "NULL");
-                }
-
-                // Search by customer name, request ID, or admin name
-                if (!string.IsNullOrEmpty(searchQuery))
-                {
-                    var search = searchQuery.Trim().ToLower();
-                    bool isNumeric = int.TryParse(search, out int requestId);
-
-                    query = query.Where(l =>
-                        l.CustomerName.ToLower().Contains(search) ||
-                        (l.PerformedByUserName != null && l.PerformedByUserName.ToLower().Contains(search)) ||
-                        (isNumeric && l.RequestId == requestId));
-                }
-
-                // Filter by action type (Accept, Decline, Complete, ManualCreate, ForceCancelAll)
-                if (!string.IsNullOrEmpty(action))
-                {
-                    query = query.Where(l => l.Action == action);
-                }
-
-                // Order by most recent first
-                query = query.OrderByDescending(l => l.ActionedAt);
-
-                // Get total count for pagination
-                int totalCount;
-                try
-                {
-                    totalCount = await query.CountAsync();
-                    _logger.LogInformation("RequestLogs query result: {FilteredCount} logs after filtering", totalCount);
-                }
-                catch (Exception countEx)
-                {
-                    _logger.LogError(countEx, "Error counting filtered logs");
-                    throw;
-                }
-
-                var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-
-                // Get current page
-                List<RequestActionLog> logs;
-                try
-                {
-                    logs = await query
-                        .Skip((page - 1) * pageSize)
-                        .Take(pageSize)
-                        .ToListAsync();
-                    _logger.LogInformation("Successfully retrieved {Count} logs for current page", logs.Count);
-                }
-                catch (Exception queryEx)
-                {
-                    _logger.LogError(queryEx, "Error executing query to retrieve logs");
-                    throw;
-                }
-
-                ViewBag.SearchQuery = searchQuery;
-                ViewBag.CurrentAction = action;
-                ViewBag.CurrentPage = page;
-                ViewBag.TotalPages = totalPages;
-                ViewBag.PageSize = pageSize;
-                ViewBag.TotalCount = totalCount;
-                ViewBag.TotalLogsInDb = totalLogsInDb; // Debug info
-
-                return View(logs);
+                query = query.Where(l =>
+                    l.CustomerName.ToLower().Contains(search) ||
+                    (l.PerformedByUserName != null && l.PerformedByUserName.ToLower().Contains(search)) ||
+                    (isNumeric && l.RequestId == requestId));
             }
-            catch (Exception ex)
+
+            // Filter by action type (Accept, Decline, Complete, ManualCreate, ForceCancelAll)
+            if (!string.IsNullOrEmpty(action))
             {
-                _logger.LogError(ex, "Error loading request logs");
-                TempData["Error"] = $"Error loading logs: {ex.Message}";
-                return RedirectToAction(nameof(Index));
+                query = query.Where(l => l.Action == action);
             }
+
+            // Order by most recent first
+            query = query.OrderByDescending(l => l.ActionedAt);
+
+            // Get total count for pagination
+            var totalCount = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            // Get current page
+            var logs = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            ViewBag.SearchQuery = searchQuery;
+            ViewBag.CurrentAction = action;
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = totalPages;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalCount = totalCount;
+
+            return View(logs);
         }
     }
 }
