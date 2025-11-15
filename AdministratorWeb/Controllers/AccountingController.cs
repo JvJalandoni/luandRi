@@ -1314,5 +1314,54 @@ namespace AdministratorWeb.Controllers
             return $"{prefix}-{sequence:D6}"; // RCP-2025-000001
         }
 
+        /// <summary>
+        /// View accounting action logs with pagination, search, and filters
+        /// </summary>
+        public async Task<IActionResult> AccountingLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
+        {
+            // Get all logs first, then filter in memory to avoid EF Core translation issues
+            var allLogs = await _context.AccountingActionLogs
+                .OrderByDescending(l => l.ActionedAt)
+                .ToListAsync();
+
+            var filteredLogs = allLogs.AsEnumerable();
+
+            // Search by customer name, payment ID, request ID, or admin name
+            if (!string.IsNullOrEmpty(searchQuery))
+            {
+                var search = searchQuery.Trim().ToLower();
+                bool isNumeric = int.TryParse(search, out int numericId);
+
+                filteredLogs = filteredLogs.Where(l =>
+                    (l.CustomerName?.ToLower().Contains(search) ?? false) ||
+                    (l.PerformedByUserName?.ToLower().Contains(search) ?? false) ||
+                    (numericId && (l.PaymentId == numericId || l.LaundryRequestId == numericId || l.AdjustmentId == numericId)));
+            }
+
+            // Filter by action type
+            if (!string.IsNullOrEmpty(action))
+            {
+                filteredLogs = filteredLogs.Where(l => l.Action == action);
+            }
+
+            // Pagination
+            var totalCount = filteredLogs.Count();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            var logs = filteredLogs
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            ViewBag.SearchQuery = searchQuery;
+            ViewBag.CurrentAction = action;
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = totalPages;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalCount = totalCount;
+
+            return View(logs);
+        }
+
     }
 }
