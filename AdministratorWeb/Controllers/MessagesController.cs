@@ -130,8 +130,12 @@ namespace AdministratorWeb.Controllers
         [HttpPost]
         public async Task<IActionResult> SendMessage(string customerId, string content, IFormFile? image = null)
         {
-            _logger.LogInformation("SendMessage called - CustomerId: {CustomerId}, Content: {Content}, HasImage: {HasImage}",
-                customerId, content?.Length ?? 0, image != null);
+            var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var currentUserEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
+            var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
+
+            _logger.LogInformation("SendMessage called - IsAuthenticated: {IsAuth}, UserId: {UserId}, UserEmail: {Email}, CustomerId: {CustomerId}, Content: {Content}, HasImage: {HasImage}",
+                isAuthenticated, currentUserId, currentUserEmail, customerId, content?.Length ?? 0, image != null);
 
             if (string.IsNullOrEmpty(customerId))
             {

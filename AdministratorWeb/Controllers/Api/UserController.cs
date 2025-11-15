@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
 using AdministratorWeb.Models;
+using AdministratorWeb.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace AdministratorWeb.Controllers.Api
@@ -18,12 +19,14 @@ namespace AdministratorWeb.Controllers.Api
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IWebHostEnvironment _environment;
+        private readonly ApplicationDbContext _context;
 
-        public UserController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IWebHostEnvironment environment)
+        public UserController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IWebHostEnvironment environment, ApplicationDbContext context)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _environment = environment;
+            _context = context;
         }
 
         /// <summary>
@@ -268,6 +271,17 @@ namespace AdministratorWeb.Controllers.Api
                                  !string.IsNullOrWhiteSpace(request.LastName) ||
                                  !string.IsNullOrWhiteSpace(request.Email);
 
+            // Capture old values for audit logging
+            var oldEmail = user.Email;
+            var oldValues = new
+            {
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.PhoneNumber,
+                user.ProfilePicturePath
+            };
+
             if (hasTextFields)
             {
                 // If any text field is provided, all required fields must be provided
@@ -281,11 +295,34 @@ namespace AdministratorWeb.Controllers.Api
                     return BadRequest(new { success = false, message = "First name, last name, and email are required" });
                 }
 
+                // Check if email is being changed - require password confirmation
+                var newEmail = request.Email.Trim();
+                if (newEmail != oldEmail)
+                {
+                    Console.WriteLine($"[API] 🔒 Email change detected: {oldEmail} -> {newEmail}");
+
+                    if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+                    {
+                        Console.WriteLine("[API] ❌ Password confirmation required for email change");
+                        return BadRequest(new { success = false, message = "Current password is required to change email" });
+                    }
+
+                    // Verify current password
+                    var passwordValid = await _userManager.CheckPasswordAsync(user, request.CurrentPassword);
+                    if (!passwordValid)
+                    {
+                        Console.WriteLine("[API] ❌ Invalid password provided");
+                        return BadRequest(new { success = false, message = "Current password is incorrect" });
+                    }
+
+                    Console.WriteLine("[API] ✅ Password verified for email change");
+                }
+
                 Console.WriteLine("[API] ✅ Validation passed, updating text fields...");
                 user.FirstName = request.FirstName.Trim();
                 user.LastName = request.LastName.Trim();
-                user.Email = request.Email.Trim();
-                user.UserName = request.Email.Trim();
+                user.Email = newEmail;
+                user.UserName = newEmail;
                 user.PhoneNumber = request.Phone?.Trim();
             }
 
@@ -293,12 +330,119 @@ namespace AdministratorWeb.Controllers.Api
             if (result.Succeeded)
             {
                 Console.WriteLine($"[API] ✅ Profile updated successfully. ProfilePicturePath: {user.ProfilePicturePath}");
+
+                // Create audit log
+                var newValues = new
+                {
+                    user.FirstName,
+                    user.LastName,
+                    user.Email,
+                    user.PhoneNumber,
+                    user.ProfilePicturePath
+                };
+
+                var log = new ProfileUpdateLog
+                {
+                    UserId = user.Id,
+                    UserName = user.FullName,
+                    UserEmail = user.Email,
+                    UpdatedByUserId = user.Id, // Self-update from mobile app
+                    UpdatedByUserName = user.FullName,
+                    UpdatedByUserEmail = user.Email,
+                    UpdateSource = "MobileApp",
+                    OldValues = System.Text.Json.JsonSerializer.Serialize(oldValues),
+                    NewValues = System.Text.Json.JsonSerializer.Serialize(newValues),
+                    PasswordChanged = false,
+                    ProfilePictureChanged = request.ProfilePicture != null,
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.ProfileUpdateLogs.Add(log);
+                await _context.SaveChangesAsync();
+                Console.WriteLine($"[API] ✅ Audit log created for profile update");
+
                 return Ok(new { success = true, message = "Profile updated successfully", profilePicturePath = user.ProfilePicturePath });
             }
 
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
             Console.WriteLine($"[API] ❌ Update failed: {errors}");
             return BadRequest(new { success = false, message = errors });
+        }
+
+        /// <summary>
+        /// Change user password - Mobile app endpoint
+        /// Requires current password verification and logs to ProfileUpdateLog
+        /// </summary>
+        [HttpPut("password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            Console.WriteLine("========================================");
+            Console.WriteLine("[API CHANGE PASSWORD] REQUEST RECEIVED");
+            Console.WriteLine($"[API] CurrentPassword provided: {!string.IsNullOrEmpty(request.CurrentPassword)}");
+            Console.WriteLine($"[API] NewPassword provided: {!string.IsNullOrEmpty(request.NewPassword)}");
+            Console.WriteLine("========================================");
+
+            var customerId = User.FindFirst("CustomerId")?.Value;
+            if (string.IsNullOrEmpty(customerId))
+            {
+                return Unauthorized("Customer ID not found in token");
+            }
+
+            var user = await _userManager.FindByIdAsync(customerId);
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            // Validate request
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
+            {
+                return BadRequest(new { success = false, message = "Current password and new password are required" });
+            }
+
+            // Verify current password
+            var passwordValid = await _userManager.CheckPasswordAsync(user, request.CurrentPassword);
+            if (!passwordValid)
+            {
+                Console.WriteLine("[API] ❌ Current password is incorrect");
+                return BadRequest(new { success = false, message = "Current password is incorrect" });
+            }
+
+            // Change password
+            var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                Console.WriteLine($"[API] ❌ Password change failed: {errors}");
+                return BadRequest(new { success = false, message = errors });
+            }
+
+            Console.WriteLine("[API] ✅ Password changed successfully");
+
+            // Create audit log
+            var log = new ProfileUpdateLog
+            {
+                UserId = user.Id,
+                UserName = user.FullName,
+                UserEmail = user.Email,
+                UpdatedByUserId = user.Id, // Self-update from mobile app
+                UpdatedByUserName = user.FullName,
+                UpdatedByUserEmail = user.Email,
+                UpdateSource = "MobileApp",
+                OldValues = System.Text.Json.JsonSerializer.Serialize(new { PasswordChanged = false }),
+                NewValues = System.Text.Json.JsonSerializer.Serialize(new { PasswordChanged = true }),
+                PasswordChanged = true,
+                ProfilePictureChanged = false,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.ProfileUpdateLogs.Add(log);
+            await _context.SaveChangesAsync();
+            Console.WriteLine("[API] ✅ Audit log created for password change");
+
+            return Ok(new { success = true, message = "Password changed successfully" });
         }
     }
 
@@ -309,5 +453,12 @@ namespace AdministratorWeb.Controllers.Api
         public string Email { get; set; } = string.Empty;
         public string? Phone { get; set; }
         public IFormFile? ProfilePicture { get; set; }
+        public string? CurrentPassword { get; set; } // Required when changing email
+    }
+
+    public class ChangePasswordRequest
+    {
+        public string CurrentPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
     }
 }

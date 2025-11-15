@@ -9,7 +9,10 @@ import {
   ActivityIndicator,
   TextInput,
   ScrollView,
+  Modal,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { laundryService, LaundryRequestResponse } from '../../services/laundryService';
 import { useThemeColor } from '../../hooks/useThemeColor';
 import { ThemedView } from '../../components/ThemedView';
@@ -42,6 +45,11 @@ export default function HistoryScreen() {
   // Filter states
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<string>('all'); // all, today, week, month, custom
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState<'start' | 'end'>('start');
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -77,7 +85,7 @@ export default function HistoryScreen() {
     }
   };
 
-  // Apply filters when allRequests, statusFilter, or searchQuery changes
+  // Apply filters when allRequests, statusFilter, searchQuery, or dateFilter changes
   useEffect(() => {
     let filtered = [...allRequests];
 
@@ -95,9 +103,41 @@ export default function HistoryScreen() {
       );
     }
 
+    // Apply date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      filtered = filtered.filter(req => {
+        const requestDate = new Date(req.requestedAt);
+
+        switch (dateFilter) {
+          case 'today':
+            return requestDate >= today;
+          case 'week':
+            const weekAgo = new Date(today);
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            return requestDate >= weekAgo;
+          case 'month':
+            const monthAgo = new Date(today);
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+            return requestDate >= monthAgo;
+          case 'custom':
+            if (startDate && endDate) {
+              const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+              const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59);
+              return requestDate >= start && requestDate <= end;
+            }
+            return true;
+          default:
+            return true;
+        }
+      });
+    }
+
     setFilteredRequests(filtered);
     setCurrentPage(1); // Reset to first page when filters change
-  }, [allRequests, statusFilter, searchQuery]);
+  }, [allRequests, statusFilter, searchQuery, dateFilter, startDate, endDate]);
 
   // Apply pagination when filteredRequests or currentPage changes
   useEffect(() => {
@@ -187,6 +227,38 @@ export default function HistoryScreen() {
     router.push(`/request-details?requestId=${requestId}`);
   };
 
+  const handleDateFilterChange = (filter: string) => {
+    setDateFilter(filter);
+    if (filter !== 'custom') {
+      setStartDate(null);
+      setEndDate(null);
+    }
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+
+    if (selectedDate) {
+      if (datePickerMode === 'start') {
+        setStartDate(selectedDate);
+      } else {
+        setEndDate(selectedDate);
+      }
+    }
+  };
+
+  const openDatePicker = (mode: 'start' | 'end') => {
+    setDatePickerMode(mode);
+    setShowDatePicker(true);
+  };
+
+  const formatDate = (date: Date | null) => {
+    if (!date) return 'Select date';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   const renderRequestCard = ({ item: request }: { item: LaundryRequestResponse }) => (
     <View style={[styles.requestCard, { backgroundColor: cardColor, borderColor: borderColor }]}>
       <View style={styles.requestHeader}>
@@ -257,12 +329,23 @@ export default function HistoryScreen() {
     </View>
   );
 
-  const renderHeader = () => (
+  const renderHeader = () => {
+    const activeFilters = [];
+    if (statusFilter !== 'all') activeFilters.push(`status: ${statusFilter}`);
+    if (dateFilter !== 'all') {
+      if (dateFilter === 'custom' && startDate && endDate) {
+        activeFilters.push(`date: ${formatDate(startDate)} - ${formatDate(endDate)}`);
+      } else {
+        activeFilters.push(`date: ${dateFilter}`);
+      }
+    }
+
+    return (
     <View style={styles.header}>
       <ThemedText style={styles.title}>Request History</ThemedText>
       <ThemedText style={[styles.subtitle, { color: mutedColor }]}>
         {filteredRequests.length} {filteredRequests.length === 1 ? 'request' : 'requests'}
-        {statusFilter !== 'all' && ` (filtered by ${statusFilter})`}
+        {activeFilters.length > 0 && ` (${activeFilters.join(', ')})`}
       </ThemedText>
 
       {/* Search Bar */}
@@ -278,7 +361,7 @@ export default function HistoryScreen() {
 
       {/* Status Filter Chips */}
       <View style={styles.filterChipsContainer}>
-        <ThemedText style={[styles.filterLabel, { color: mutedColor }]}>Filter:</ThemedText>
+        <ThemedText style={[styles.filterLabel, { color: mutedColor }]}>Status:</ThemedText>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterChipsScroll}>
           {['all', 'pending', 'accepted', 'inprogress', 'washing', 'completed', 'cancelled', 'declined'].map((status) => (
             <TouchableOpacity
@@ -299,8 +382,64 @@ export default function HistoryScreen() {
           ))}
         </ScrollView>
       </View>
+
+      {/* Date Filter Chips */}
+      <View style={styles.filterChipsContainer}>
+        <ThemedText style={[styles.filterLabel, { color: mutedColor }]}>Date:</ThemedText>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterChipsScroll}>
+          {['all', 'today', 'week', 'month', 'custom'].map((filter) => (
+            <TouchableOpacity
+              key={filter}
+              style={[
+                styles.filterChip,
+                { backgroundColor: dateFilter === filter ? secondaryColor : cardColor, borderColor: borderColor }
+              ]}
+              onPress={() => handleDateFilterChange(filter)}
+            >
+              <Text style={[
+                styles.filterChipText,
+                { color: dateFilter === filter ? '#ffffff' : textColor }
+              ]}>
+                {filter === 'all' ? 'All Time' :
+                 filter === 'today' ? 'Today' :
+                 filter === 'week' ? 'Last 7 Days' :
+                 filter === 'month' ? 'Last 30 Days' : 'Custom Range'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Custom Date Range Picker */}
+      {dateFilter === 'custom' && (
+        <View style={[styles.customDateContainer, { backgroundColor: cardColor, borderColor: borderColor }]}>
+          <View style={styles.datePickerRow}>
+            <ThemedText style={[styles.dateLabel, { color: mutedColor }]}>From:</ThemedText>
+            <TouchableOpacity
+              style={[styles.dateButton, { backgroundColor: backgroundColor, borderColor: borderColor }]}
+              onPress={() => openDatePicker('start')}
+            >
+              <ThemedText style={[styles.dateButtonText, { color: textColor }]}>
+                {formatDate(startDate)}
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.datePickerRow}>
+            <ThemedText style={[styles.dateLabel, { color: mutedColor }]}>To:</ThemedText>
+            <TouchableOpacity
+              style={[styles.dateButton, { backgroundColor: backgroundColor, borderColor: borderColor }]}
+              onPress={() => openDatePicker('end')}
+            >
+              <ThemedText style={[styles.dateButtonText, { color: textColor }]}>
+                {formatDate(endDate)}
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
-  );
+    );
+  };
 
   const renderEmpty = () => (
     <View style={styles.emptyState}>
@@ -365,6 +504,51 @@ export default function HistoryScreen() {
         windowSize={10}
         removeClippedSubviews={true}
       />
+
+      {/* Date Picker Modal */}
+      {showDatePicker && (
+        <>
+          {Platform.OS === 'ios' ? (
+            <Modal
+              transparent={true}
+              animationType="slide"
+              visible={showDatePicker}
+              onRequestClose={() => setShowDatePicker(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={[styles.modalContent, { backgroundColor: cardColor }]}>
+                  <View style={styles.modalHeader}>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <ThemedText style={[styles.modalButton, { color: primaryColor }]}>Cancel</ThemedText>
+                    </TouchableOpacity>
+                    <ThemedText style={styles.modalTitle}>
+                      Select {datePickerMode === 'start' ? 'Start' : 'End'} Date
+                    </ThemedText>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <ThemedText style={[styles.modalButton, { color: primaryColor }]}>Done</ThemedText>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={datePickerMode === 'start' ? (startDate || new Date()) : (endDate || new Date())}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleDateChange}
+                    textColor={textColor}
+                  />
+                </View>
+              </View>
+            </Modal>
+          ) : (
+            <DateTimePicker
+              value={datePickerMode === 'start' ? (startDate || new Date()) : (endDate || new Date())}
+              mode="date"
+              display="default"
+              onChange={handleDateChange}
+            />
+          )}
+        </>
+      )}
+
       <AlertComponent />
     </ThemedView>
   );
@@ -538,5 +722,58 @@ const styles = StyleSheet.create({
   },
   endMessageText: {
     fontSize: 14,
+  },
+  customDateContainer: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 12,
+  },
+  datePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    width: 60,
+  },
+  dateButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  dateButtonText: {
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalButton: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
