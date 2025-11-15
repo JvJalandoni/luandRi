@@ -101,26 +101,6 @@ namespace AdministratorWeb.Controllers
                 assignedRobot.Status = RobotStatus.Busy;
                 assignedRobot.CurrentTask = $"Handling request #{requestId}";
 
-                // Create audit log
-                var log = new RequestActionLog
-                {
-                    RequestId = requestId,
-                    CustomerId = request.CustomerId,
-                    CustomerName = request.CustomerName,
-                    Action = "Accept",
-                    PerformedByUserId = adminUserId,
-                    PerformedByUserName = adminUser?.FullName,
-                    PerformedByUserEmail = adminUser?.Email,
-                    OldStatus = oldStatus,
-                    NewStatus = RequestStatus.Accepted.ToString(),
-                    AssignedRobotName = assignedRobot.Name,
-                    TotalCost = request.TotalCost,
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-                    ActionedAt = DateTime.UtcNow,
-                    Notes = $"Robot {assignedRobot.Name} dispatched to {user?.RoomName}"
-                };
-                _context.RequestActionLogs.Add(log);
-
                 await _context.SaveChangesAsync();
 
                 // **CRITICAL: Start robot line following to target beacon**
@@ -167,24 +147,6 @@ namespace AdministratorWeb.Controllers
                 request.DeclineReason = reason ?? "No reason provided";
                 request.HandledById = adminUserId;
                 request.ProcessedAt = DateTime.UtcNow;
-
-                // Create audit log
-                var log = new RequestActionLog
-                {
-                    RequestId = requestId,
-                    CustomerId = request.CustomerId,
-                    CustomerName = request.CustomerName,
-                    Action = "Decline",
-                    PerformedByUserId = adminUserId,
-                    PerformedByUserName = adminUser?.FullName,
-                    PerformedByUserEmail = adminUser?.Email,
-                    OldStatus = oldStatus,
-                    NewStatus = RequestStatus.Declined.ToString(),
-                    Reason = reason ?? "No reason provided",
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-                    ActionedAt = DateTime.UtcNow
-                };
-                _context.RequestActionLogs.Add(log);
 
                 await _context.SaveChangesAsync();
 
@@ -258,26 +220,6 @@ namespace AdministratorWeb.Controllers
                         requestId, request.TotalCost.Value);
                 }
 
-                // Create audit log
-                var log = new RequestActionLog
-                {
-                    RequestId = requestId,
-                    CustomerId = request.CustomerId,
-                    CustomerName = request.CustomerName,
-                    Action = "Complete",
-                    PerformedByUserId = adminUserId,
-                    PerformedByUserName = adminUser?.FullName,
-                    PerformedByUserEmail = adminUser?.Email,
-                    OldStatus = oldStatus,
-                    NewStatus = RequestStatus.Completed.ToString(),
-                    AssignedRobotName = freedRobotName,
-                    TotalCost = request.TotalCost,
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-                    ActionedAt = DateTime.UtcNow,
-                    Notes = $"Pending payment created for ${request.TotalCost:F2}"
-                };
-                _context.RequestActionLogs.Add(log);
-
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Request {RequestId} completed by user {UserId}",
@@ -320,24 +262,6 @@ namespace AdministratorWeb.Controllers
             {
                 request.Status = RequestStatus.FinishedWashing;
                 request.ProcessedAt = DateTime.UtcNow;
-
-                // Create audit log
-                var log = new RequestActionLog
-                {
-                    RequestId = requestId,
-                    CustomerId = request.CustomerId,
-                    CustomerName = request.CustomerName,
-                    Action = "MarkForPickup",
-                    PerformedByUserId = adminUserId,
-                    PerformedByUserName = adminUser?.FullName,
-                    PerformedByUserEmail = adminUser?.Email,
-                    OldStatus = oldStatus,
-                    NewStatus = RequestStatus.FinishedWashing.ToString(),
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-                    ActionedAt = DateTime.UtcNow,
-                    Notes = "Laundry finished washing, ready for pickup/delivery"
-                };
-                _context.RequestActionLogs.Add(log);
 
                 await _context.SaveChangesAsync();
 
@@ -393,24 +317,6 @@ namespace AdministratorWeb.Controllers
                 // Change status to GoingToRoom so robot starts moving
                 request.Status = RequestStatus.FinishedWashingGoingToRoom;
                 request.ProcessedAt = DateTime.UtcNow;
-
-                // Create audit log
-                var log = new RequestActionLog
-                {
-                    RequestId = requestId,
-                    CustomerId = request.CustomerId,
-                    CustomerName = request.CustomerName,
-                    Action = "StartDelivery",
-                    PerformedByUserId = adminUserId,
-                    PerformedByUserName = adminUser?.FullName,
-                    PerformedByUserEmail = adminUser?.Email,
-                    OldStatus = oldStatus,
-                    NewStatus = RequestStatus.FinishedWashingGoingToRoom.ToString(),
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-                    ActionedAt = DateTime.UtcNow,
-                    Notes = "Delivery started - robot dispatched to customer room"
-                };
-                _context.RequestActionLogs.Add(log);
 
                 await _context.SaveChangesAsync();
 
@@ -528,29 +434,6 @@ namespace AdministratorWeb.Controllers
                     _context.LaundryRequests.Add(walkInRequest);
                     await _context.SaveChangesAsync();
 
-                    // Create audit log for walk-in request creation
-                    var walkInLog = new RequestActionLog
-                    {
-                        RequestId = walkInRequest.Id,
-                        CustomerId = customer.Id,
-                        CustomerName = customer.FullName,
-                        Action = "ManualCreate",
-                        PerformedByUserId = adminUserId,
-                        PerformedByUserName = adminUser?.FullName,
-                        PerformedByUserEmail = adminUser?.Email,
-                        OldStatus = null,
-                        NewStatus = RequestStatus.Washing.ToString(),
-                        RequestType = "WalkIn",
-                        WeightKg = dto.WeightKg.Value,
-                        TotalCost = totalCost,
-                        AssignedRobotName = "WALK_IN",
-                        IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-                        ActionedAt = DateTime.UtcNow,
-                        Notes = $"Walk-in service - {dto.Notes ?? "No additional notes"}"
-                    };
-                    _context.RequestActionLogs.Add(walkInLog);
-                    await _context.SaveChangesAsync();
-
                     _logger.LogInformation(
                         "Walk-in request #{RequestId} created by admin {AdminId} for customer {CustomerName}. Weight: {Weight}kg, Cost: ₱{Cost}",
                         walkInRequest.Id, adminUserId, customer.FullName, dto.WeightKg.Value, totalCost);
@@ -614,26 +497,6 @@ namespace AdministratorWeb.Controllers
                     // Update robot status
                     assignedRobot.Status = RobotStatus.Busy;
                     assignedRobot.CurrentTask = $"Manual request #{robotRequest.Id} (Admin-created)";
-
-                    // Create audit log for robot delivery request creation
-                    var robotLog = new RequestActionLog
-                    {
-                        RequestId = robotRequest.Id,
-                        CustomerId = customer.Id,
-                        CustomerName = customer.FullName,
-                        Action = "ManualCreate",
-                        PerformedByUserId = adminUserId,
-                        PerformedByUserName = adminUser?.FullName,
-                        PerformedByUserEmail = adminUser?.Email,
-                        OldStatus = null,
-                        NewStatus = RequestStatus.Accepted.ToString(),
-                        RequestType = "RobotDelivery",
-                        AssignedRobotName = assignedRobot.Name,
-                        IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-                        ActionedAt = DateTime.UtcNow,
-                        Notes = $"Robot delivery - {dto.Notes ?? "No additional notes"}. Robot {assignedRobot.Name} dispatched to {customer.RoomName}"
-                    };
-                    _context.RequestActionLogs.Add(robotLog);
 
                     await _context.SaveChangesAsync();
 
@@ -915,7 +778,7 @@ namespace AdministratorWeb.Controllers
 
                 var count = requestsToCancel.Count;
 
-                // Cancel all requests and create audit logs
+                // Cancel all requests
                 foreach (var request in requestsToCancel)
                 {
                     var oldStatus = request.Status.ToString();
@@ -924,25 +787,6 @@ namespace AdministratorWeb.Controllers
                     request.DeclineReason = "Force cancelled by administrator";
                     request.HandledById = adminUserId;
                     request.ProcessedAt = DateTime.UtcNow;
-
-                    // Create audit log for each cancellation
-                    var log = new RequestActionLog
-                    {
-                        RequestId = request.Id,
-                        CustomerId = request.CustomerId,
-                        CustomerName = request.CustomerName,
-                        Action = "ForceCancelAll",
-                        PerformedByUserId = adminUserId,
-                        PerformedByUserName = adminUser?.FullName,
-                        PerformedByUserEmail = adminUser?.Email,
-                        OldStatus = oldStatus,
-                        NewStatus = RequestStatus.Cancelled.ToString(),
-                        Reason = "Force cancelled by administrator",
-                        IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-                        ActionedAt = DateTime.UtcNow,
-                        Notes = $"Part of bulk force cancel operation ({count} requests)"
-                    };
-                    _context.RequestActionLogs.Add(log);
 
                     // Send notification to customer
                     try
@@ -978,74 +822,6 @@ namespace AdministratorWeb.Controllers
             }
 
             return RedirectToAction(nameof(Index));
-        }
-
-        /// <summary>
-        /// View request action logs with pagination, search, and filters
-        /// </summary>
-        public async Task<IActionResult> RequestLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
-        {
-            try
-            {
-                // FIRST: Get ALL logs without any filters to debug
-                var allLogsCount = await _context.RequestActionLogs.CountAsync();
-                _logger.LogInformation("Total RequestActionLogs in database: {Count}", allLogsCount);
-
-                // Start with base query
-                var query = _context.RequestActionLogs.AsQueryable();
-
-                // Apply search filter ONLY if provided
-                if (!string.IsNullOrWhiteSpace(searchQuery))
-                {
-                    query = query.Where(l =>
-                        l.CustomerName.Contains(searchQuery) ||
-                        l.CustomerId.Contains(searchQuery) ||
-                        (l.PerformedByUserName != null && l.PerformedByUserName.Contains(searchQuery)) ||
-                        (l.PerformedByUserEmail != null && l.PerformedByUserEmail.Contains(searchQuery)));
-                }
-
-                // Apply action filter ONLY if provided
-                if (!string.IsNullOrWhiteSpace(action))
-                {
-                    query = query.Where(l => l.Action == action);
-                }
-
-                // Order by most recent first
-                query = query.OrderByDescending(l => l.ActionedAt);
-
-                // Get total count for pagination
-                var totalCount = await query.CountAsync();
-                var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-
-                _logger.LogInformation("After filters - Count: {Count}, SearchQuery: '{SearchQuery}', Action: '{Action}'",
-                    totalCount, searchQuery ?? "none", action ?? "none");
-
-                // Get current page
-                var logs = await query
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-
-                ViewBag.SearchQuery = searchQuery ?? "";
-                ViewBag.CurrentAction = action ?? "";
-                ViewBag.CurrentPage = page;
-                ViewBag.TotalPages = totalPages;
-                ViewBag.PageSize = pageSize;
-                ViewBag.TotalCount = totalCount;
-
-                return View(logs);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading request logs");
-                ViewBag.SearchQuery = "";
-                ViewBag.CurrentAction = "";
-                ViewBag.CurrentPage = 1;
-                ViewBag.TotalPages = 0;
-                ViewBag.PageSize = pageSize;
-                ViewBag.TotalCount = 0;
-                return View(new List<RequestActionLog>());
-            }
         }
     }
 }
