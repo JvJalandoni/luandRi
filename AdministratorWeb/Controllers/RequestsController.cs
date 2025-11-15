@@ -985,47 +985,59 @@ namespace AdministratorWeb.Controllers
         /// </summary>
         public async Task<IActionResult> RequestLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
         {
-            // Start with base query
-            var query = _context.RequestActionLogs.AsQueryable();
-
-            // Apply search filter
-            if (!string.IsNullOrWhiteSpace(searchQuery))
+            try
             {
-                query = query.Where(l =>
-                    l.CustomerName.Contains(searchQuery) ||
-                    l.CustomerId.Contains(searchQuery) ||
-                    (l.PerformedByUserName != null && l.PerformedByUserName.Contains(searchQuery)) ||
-                    (l.PerformedByUserEmail != null && l.PerformedByUserEmail.Contains(searchQuery)) ||
-                    l.RequestId.ToString().Contains(searchQuery));
-            }
+                // Start with base query - order first
+                var query = _context.RequestActionLogs
+                    .OrderByDescending(l => l.ActionedAt)
+                    .AsQueryable();
 
-            // Apply action filter
-            if (!string.IsNullOrWhiteSpace(action))
+                // Apply search filter
+                if (!string.IsNullOrWhiteSpace(searchQuery))
+                {
+                    query = query.Where(l =>
+                        EF.Functions.Like(l.CustomerName, $"%{searchQuery}%") ||
+                        EF.Functions.Like(l.CustomerId, $"%{searchQuery}%") ||
+                        (l.PerformedByUserName != null && EF.Functions.Like(l.PerformedByUserName, $"%{searchQuery}%")) ||
+                        (l.PerformedByUserEmail != null && EF.Functions.Like(l.PerformedByUserEmail, $"%{searchQuery}%")));
+                }
+
+                // Apply action filter
+                if (!string.IsNullOrWhiteSpace(action))
+                {
+                    query = query.Where(l => l.Action == action);
+                }
+
+                // Get total count for pagination
+                var totalCount = await query.CountAsync();
+                var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                // Get current page
+                var logs = await query
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                ViewBag.SearchQuery = searchQuery ?? "";
+                ViewBag.CurrentAction = action ?? "";
+                ViewBag.CurrentPage = page;
+                ViewBag.TotalPages = totalPages;
+                ViewBag.PageSize = pageSize;
+                ViewBag.TotalCount = totalCount;
+
+                return View(logs);
+            }
+            catch (Exception ex)
             {
-                query = query.Where(l => l.Action == action);
+                _logger.LogError(ex, "Error loading request logs");
+                ViewBag.SearchQuery = "";
+                ViewBag.CurrentAction = "";
+                ViewBag.CurrentPage = 1;
+                ViewBag.TotalPages = 0;
+                ViewBag.PageSize = pageSize;
+                ViewBag.TotalCount = 0;
+                return View(new List<RequestActionLog>());
             }
-
-            // Order by most recent first
-            query = query.OrderByDescending(l => l.ActionedAt);
-
-            // Get total count for pagination
-            var totalCount = await query.CountAsync();
-            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-
-            // Get current page
-            var logs = await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            ViewBag.SearchQuery = searchQuery;
-            ViewBag.CurrentAction = action;
-            ViewBag.CurrentPage = page;
-            ViewBag.TotalPages = totalPages;
-            ViewBag.PageSize = pageSize;
-            ViewBag.TotalCount = totalCount;
-
-            return View(logs);
         }
     }
 }
