@@ -987,30 +987,38 @@ namespace AdministratorWeb.Controllers
         {
             try
             {
-                // Start with base query - order first
-                var query = _context.RequestActionLogs
-                    .OrderByDescending(l => l.ActionedAt)
-                    .AsQueryable();
+                // FIRST: Get ALL logs without any filters to debug
+                var allLogsCount = await _context.RequestActionLogs.CountAsync();
+                _logger.LogInformation("Total RequestActionLogs in database: {Count}", allLogsCount);
 
-                // Apply search filter
+                // Start with base query
+                var query = _context.RequestActionLogs.AsQueryable();
+
+                // Apply search filter ONLY if provided
                 if (!string.IsNullOrWhiteSpace(searchQuery))
                 {
                     query = query.Where(l =>
-                        EF.Functions.Like(l.CustomerName, $"%{searchQuery}%") ||
-                        EF.Functions.Like(l.CustomerId, $"%{searchQuery}%") ||
-                        (l.PerformedByUserName != null && EF.Functions.Like(l.PerformedByUserName, $"%{searchQuery}%")) ||
-                        (l.PerformedByUserEmail != null && EF.Functions.Like(l.PerformedByUserEmail, $"%{searchQuery}%")));
+                        l.CustomerName.Contains(searchQuery) ||
+                        l.CustomerId.Contains(searchQuery) ||
+                        (l.PerformedByUserName != null && l.PerformedByUserName.Contains(searchQuery)) ||
+                        (l.PerformedByUserEmail != null && l.PerformedByUserEmail.Contains(searchQuery)));
                 }
 
-                // Apply action filter
+                // Apply action filter ONLY if provided
                 if (!string.IsNullOrWhiteSpace(action))
                 {
                     query = query.Where(l => l.Action == action);
                 }
 
+                // Order by most recent first
+                query = query.OrderByDescending(l => l.ActionedAt);
+
                 // Get total count for pagination
                 var totalCount = await query.CountAsync();
                 var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                _logger.LogInformation("After filters - Count: {Count}, SearchQuery: '{SearchQuery}', Action: '{Action}'",
+                    totalCount, searchQuery ?? "none", action ?? "none");
 
                 // Get current page
                 var logs = await query
