@@ -32,13 +32,15 @@
                 <div class="col-md-4">
                     <label for="action" class="form-label">Action Type</label>
                     <select class="form-select" id="action" name="action">
-                        <option value="">All Actions</option>
-                        <option value="MarkAsPaid" selected="@(currentAction == "MarkAsPaid")">Mark as Paid</option>
-                        <option value="MarkAsPending" selected="@(currentAction == "MarkAsPending")">Mark as Pending</option>
-                        <option value="MarkAsFailed" selected="@(currentAction == "MarkAsFailed")">Mark as Failed</option>
-                        <option value="CancelPayment" selected="@(currentAction == "CancelPayment")">Cancel Payment</option>
-                        <option value="CreateAdjustment" selected="@(currentAction == "CreateAdjustment")">Create Adjustment</option>
-                        <option value="DeleteAdjustment" selected="@(currentAction == "DeleteAdjustment")">Delete Adjustment</option>
+                        <option value="" @(string.IsNullOrEmpty(currentAction) ? "selected" : "")>All Actions</option>
+                        <option value="MarkAsPaid" @(currentAction == "MarkAsPaid" ? "selected" : "")>Mark as Paid</option>
+                        <option value="MarkAsPending" @(currentAction == "MarkAsPending" ? "selected" : "")>Mark as Pending</option>
+                        <option value="MarkAsFailed" @(currentAction == "MarkAsFailed" ? "selected" : "")>Mark as Failed</option>
+                        <option value="CancelPayment" @(currentAction == "CancelPayment" ? "selected" : "")>Cancel Payment</option>
+                        <option value="CreateAdjustment" @(currentAction == "CreateAdjustment" ? "selected" : "")>Create Adjustment</option>
+                        <option value="DeleteAdjustment" @(currentAction == "DeleteAdjustment" ? "selected" : "")>Delete Adjustment</option>
+                        <option value="IssueRefund" @(currentAction == "IssueRefund" ? "selected" : "")>Issue Refund</option>
+                        <option value="TestLog" @(currentAction == "TestLog" ? "selected" : "")>Test Log</option>
                     </select>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
@@ -235,6 +237,6 @@
 
     <!-- Version Number -->
     <div class="text-center mt-4">
-        <small class="text-muted">Audit Logs Page Version: <strong>1.6</strong> | Last Updated: @DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") UTC</small>
+        <small class="text-muted">Audit Logs Page Version: <strong>1.7</strong> | Last Updated: @DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") UTC</small>
     </div>
 </div>
