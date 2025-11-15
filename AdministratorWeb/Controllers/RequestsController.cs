@@ -985,40 +985,38 @@ namespace AdministratorWeb.Controllers
         /// </summary>
         public async Task<IActionResult> RequestLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
         {
-            // Get all logs first
-            var allLogs = await _context.RequestActionLogs
-                .OrderByDescending(l => l.ActionedAt)
-                .ToListAsync();
+            var query = _context.RequestActionLogs.AsQueryable();
 
-            // Start with all logs - NO FILTERING BY DEFAULT
-            IEnumerable<RequestActionLog> filteredLogs = allLogs;
-
-            // ONLY apply search if user actually entered something
-            if (!string.IsNullOrWhiteSpace(searchQuery))
+            // Search by customer name, request ID, or admin name
+            if (!string.IsNullOrEmpty(searchQuery))
             {
                 var search = searchQuery.Trim().ToLower();
                 bool isNumeric = int.TryParse(search, out int requestId);
 
-                filteredLogs = filteredLogs.Where(l =>
-                    (l.CustomerName?.ToLower().Contains(search) ?? false) ||
-                    (l.PerformedByUserName?.ToLower().Contains(search) ?? false) ||
+                query = query.Where(l =>
+                    l.CustomerName.ToLower().Contains(search) ||
+                    (l.PerformedByUserName != null && l.PerformedByUserName.ToLower().Contains(search)) ||
                     (isNumeric && l.RequestId == requestId));
             }
 
-            // ONLY apply action filter if user selected one
-            if (!string.IsNullOrWhiteSpace(action))
+            // Filter by action type
+            if (!string.IsNullOrEmpty(action))
             {
-                filteredLogs = filteredLogs.Where(l => l.Action == action);
+                query = query.Where(l => l.Action == action);
             }
 
-            // Pagination
-            var totalCount = filteredLogs.Count();
+            // Order by most recent first
+            query = query.OrderByDescending(l => l.ActionedAt);
+
+            // Get total count for pagination
+            var totalCount = await query.CountAsync();
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-            var logs = filteredLogs
+            // Get current page
+            var logs = await query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .ToList();
+                .ToListAsync();
 
             ViewBag.SearchQuery = searchQuery;
             ViewBag.CurrentAction = action;
