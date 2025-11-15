@@ -3,8 +3,7 @@
 
 @{
     ViewData["Title"] = "Profile Update Logs";
-    var users = ViewBag.Users as List<dynamic>;
-    var currentUserId = ViewBag.CurrentUserId as string;
+    var searchQuery = ViewBag.SearchQuery as string;
     var currentUpdateSource = ViewBag.CurrentUpdateSource as string;
     var currentPage = (int)ViewBag.CurrentPage;
     var totalPages = (int)ViewBag.TotalPages;
@@ -85,18 +84,10 @@
         <form method="get" asp-action="ProfileLogs" class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
                 <label class="block text-sm font-semibold text-slate-300 mb-2 flex items-center">
-                    <i data-lucide="user" class="w-4 h-4 mr-2"></i>
-                    Filter by User
+                    <i data-lucide="search" class="w-4 h-4 mr-2"></i>
+                    Search by Name or Email
                 </label>
-                <select name="userId" class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all">
-                    <option value="">All Users</option>
-                    @foreach (var user in users ?? new List<dynamic>())
-                    {
-                        <option value="@user.Id" selected="@(user.Id == currentUserId)">
-                            @user.FullName
-                        </option>
-                    }
-                </select>
+                <input type="text" name="searchQuery" value="@searchQuery" placeholder="Search users..." class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all placeholder-slate-400" />
             </div>
             <div>
                 <label class="block text-sm font-semibold text-slate-300 mb-2 flex items-center">
@@ -326,7 +317,7 @@
 {
     <nav class="mt-8 flex justify-center animate-slide-up" style="animation-delay: 0.4s;">
         <div class="inline-flex items-center space-x-1 bg-slate-800/50 backdrop-blur-xl rounded-xl border border-slate-700/50 p-1.5">
-            <a href="@Url.Action("ProfileLogs", new { userId = currentUserId, updateSource = currentUpdateSource, page = currentPage - 1 })"
+            <a href="@Url.Action("ProfileLogs", new { searchQuery = searchQuery, updateSource = currentUpdateSource, page = currentPage - 1 })"
                class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all @(currentPage == 1 ? "text-slate-500 cursor-not-allowed" : "text-white hover:bg-slate-700/50")">
                 <i data-lucide="chevron-left" class="w-4 h-4 mr-1"></i>
                 Previous
@@ -335,14 +326,14 @@
             <div class="flex items-center space-x-1 px-2">
                 @for (int i = 1; i <= totalPages; i++)
                 {
-                    <a href="@Url.Action("ProfileLogs", new { userId = currentUserId, updateSource = currentUpdateSource, page = i })"
+                    <a href="@Url.Action("ProfileLogs", new { searchQuery = searchQuery, updateSource = currentUpdateSource, page = i })"
                        class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium rounded-lg transition-all @(i == currentPage ? "bg-gradient-to-r from-brand-600 to-indigo-600 text-white shadow-lg" : "text-slate-300 hover:bg-slate-700/50")">
                         @i
                     </a>
                 }
             </div>
 
-            <a href="@Url.Action("ProfileLogs", new { userId = currentUserId, updateSource = currentUpdateSource, page = currentPage + 1 })"
+            <a href="@Url.Action("ProfileLogs", new { searchQuery = searchQuery, updateSource = currentUpdateSource, page = currentPage + 1 })"
                class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all @(currentPage == totalPages ? "text-slate-500 cursor-not-allowed" : "text-white hover:bg-slate-700/50")">
                 Next
                 <i data-lucide="chevron-right" class="w-4 h-4 ml-1"></i>

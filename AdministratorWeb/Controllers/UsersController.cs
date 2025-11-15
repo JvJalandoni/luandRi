@@ -383,14 +383,17 @@ namespace AdministratorWeb.Controllers
         /// <summary>
         /// View profile update logs with pagination and filters
         /// </summary>
-        public async Task<IActionResult> ProfileLogs(string userId = "", string updateSource = "", int page = 1, int pageSize = 20)
+        public async Task<IActionResult> ProfileLogs(string searchQuery = "", string updateSource = "", int page = 1, int pageSize = 20)
         {
             var query = _context.ProfileUpdateLogs.AsQueryable();
 
-            // Filter by user
-            if (!string.IsNullOrEmpty(userId))
+            // Search by user name or email
+            if (!string.IsNullOrEmpty(searchQuery))
             {
-                query = query.Where(l => l.UserId == userId);
+                var search = searchQuery.Trim().ToLower();
+                query = query.Where(l =>
+                    l.UserName.ToLower().Contains(search) ||
+                    l.UserEmail.ToLower().Contains(search));
             }
 
             // Filter by update source (MobileApp, Admin, Web)
@@ -412,15 +415,7 @@ namespace AdministratorWeb.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
-            // Get all users for filter dropdown
-            var users = await _userManager.Users
-                .OrderBy(u => u.FirstName)
-                .ThenBy(u => u.LastName)
-                .Select(u => new { u.Id, FullName = u.FirstName + " " + u.LastName })
-                .ToListAsync();
-
-            ViewBag.Users = users;
-            ViewBag.CurrentUserId = userId;
+            ViewBag.SearchQuery = searchQuery;
             ViewBag.CurrentUpdateSource = updateSource;
             ViewBag.CurrentPage = page;
             ViewBag.TotalPages = totalPages;
