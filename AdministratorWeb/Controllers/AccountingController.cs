@@ -588,6 +588,7 @@ namespace AdministratorWeb.Controllers
             }
 
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var oldStatus = payment.Status.ToString();
 
             payment.Status = PaymentStatus.Completed;
             payment.ProcessedAt = DateTime.UtcNow;
@@ -599,6 +600,28 @@ namespace AdministratorWeb.Controllers
 
             payment.LaundryRequest.IsPaid = true;
 
+            await _context.SaveChangesAsync();
+
+            // Add audit log for payment confirmation
+            var adminUser = await _context.Users.FindAsync(userId);
+            var auditLog = new AccountingActionLog
+            {
+                Action = "ConfirmPayment",
+                PaymentId = payment.Id,
+                LaundryRequestId = payment.LaundryRequestId,
+                CustomerId = payment.CustomerId,
+                CustomerName = payment.CustomerName,
+                Amount = payment.Amount,
+                OldStatus = oldStatus,
+                NewStatus = PaymentStatus.Completed.ToString(),
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                Details = string.IsNullOrEmpty(notes) ? "Payment confirmed" : $"Payment confirmed, Notes: {notes}",
+                ActionedAt = DateTime.UtcNow,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+            };
+            _context.AccountingActionLogs.Add(auditLog);
             await _context.SaveChangesAsync();
 
             // Generate receipt for the confirmed payment
@@ -1368,7 +1391,7 @@ namespace AdministratorWeb.Controllers
         /// <summary>
         /// View accounting audit logs with pagination and filtering
         /// </summary>
-        public async Task<IActionResult> AuditLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
+        public async Task<IActionResult> AuditLogs(string searchQuery = "", string actionType = "", int page = 1, int pageSize = 20)
         {
             try
             {
@@ -1394,10 +1417,10 @@ namespace AdministratorWeb.Controllers
                 }
 
                 // Apply action filter
-                if (!string.IsNullOrWhiteSpace(action))
+                if (!string.IsNullOrWhiteSpace(actionType))
                 {
                     ViewBag.DebugActionFilterApplied = true;
-                    query = query.Where(l => l.Action == action);
+                    query = query.Where(l => l.Action == actionType);
                 }
                 else
                 {
@@ -1418,7 +1441,7 @@ namespace AdministratorWeb.Controllers
                     .ToListAsync();
 
                 ViewBag.SearchQuery = searchQuery ?? "";
-                ViewBag.CurrentAction = action ?? "";
+                ViewBag.CurrentAction = actionType ?? "";
                 ViewBag.CurrentPage = page;
                 ViewBag.TotalPages = totalPages;
                 ViewBag.PageSize = pageSize;

@@ -5,6 +5,9 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UserSecretsId>aspnet-AdministratorWeb-a92843d0-37c5-48a5-98a0-dcebbbd75c5c</UserSecretsId>
+        <!-- Enable runtime compilation and copy views to publish -->
+        <RazorCompileOnPublish>true</RazorCompileOnPublish>
+        <CopyRazorGenerateFilesToPublishDirectory>true</CopyRazorGenerateFilesToPublishDirectory>
     </PropertyGroup>
 
     <ItemGroup>
