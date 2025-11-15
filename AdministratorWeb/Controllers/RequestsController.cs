@@ -34,12 +34,22 @@ namespace AdministratorWeb.Controllers
             var robots = await _robotService.GetAllRobotsAsync();
             var availableRobots = robots.Where(r => r.IsActive && !r.IsOffline).ToList();
 
-            // Get all customers (members only) for manual request creation
+            // Get all customers (members only) for manual request creation - fetch directly from DB to avoid caching
             var userManager = HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
-            var allUsers = await userManager.GetUsersInRoleAsync("Member");
-            var customers = allUsers
-                .OrderBy(u => u.FullName)
-                .ToList();
+
+            // Get all user IDs with Member role
+            var memberRoleId = await _context.Roles.Where(r => r.Name == "Member").Select(r => r.Id).FirstOrDefaultAsync();
+            var memberUserIds = await _context.UserRoles
+                .Where(ur => ur.RoleId == memberRoleId)
+                .Select(ur => ur.UserId)
+                .ToListAsync();
+
+            // Fetch fresh user data from database, grouped by Id to avoid duplicates
+            var customers = await _context.Users
+                .Where(u => memberUserIds.Contains(u.Id))
+                .OrderBy(u => u.FirstName)
+                .ThenBy(u => u.LastName)
+                .ToListAsync();
 
             var dto = new RequestsIndexDto
             {
