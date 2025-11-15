@@ -42,14 +42,23 @@ namespace AdministratorWeb.Controllers
             var memberUserIds = await _context.UserRoles
                 .Where(ur => ur.RoleId == memberRoleId)
                 .Select(ur => ur.UserId)
+                .Distinct()
                 .ToListAsync();
 
-            // Fetch fresh user data from database, grouped by Id to avoid duplicates
+            // Fetch fresh user data from database - use Distinct and AsNoTracking to ensure fresh data
             var customers = await _context.Users
+                .AsNoTracking()
                 .Where(u => memberUserIds.Contains(u.Id))
+                .GroupBy(u => u.Id)
+                .Select(g => g.First())
                 .OrderBy(u => u.FirstName)
                 .ThenBy(u => u.LastName)
                 .ToListAsync();
+
+            // DEBUG: Log what we're loading
+            _logger.LogInformation("Loading {Count} customers for dropdown: {Customers}",
+                customers.Count,
+                string.Join(", ", customers.Select(c => $"{c.Id}:{c.FullName}")));
 
             var dto = new RequestsIndexDto
             {
