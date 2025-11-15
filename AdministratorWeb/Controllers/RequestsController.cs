@@ -35,10 +35,9 @@ namespace AdministratorWeb.Controllers
             var robots = await _robotService.GetAllRobotsAsync();
             var availableRobots = robots.Where(r => r.IsActive && !r.IsOffline).ToList();
 
-            // Get all customers (members only) for manual request creation - same way as /users does it
+            // Get all customers for manual request creation - same way as /users does it
             var userManager = HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
-            var allMembers = await userManager.GetUsersInRoleAsync("Member");
-            var customers = allMembers.OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ToList();
+            var customers = await userManager.Users.OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ToListAsync();
 
             var dto = new RequestsIndexDto
             {
