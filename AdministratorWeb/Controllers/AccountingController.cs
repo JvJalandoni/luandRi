@@ -291,9 +291,12 @@ namespace AdministratorWeb.Controllers
 
             request.IsPaid = true;
 
-            // Create audit log
+            // IMPORTANT: Save payment first to get the ID
+            await _context.SaveChangesAsync();
+
+            // Now create audit log with proper payment ID
             var adminUser = await _context.Users.FindAsync(userId);
-            var oldStatus = existingPayment != null ? existingPayment.Status.ToString() : "None";
+            var oldStatus = existingPayment != null ? "Pending" : "None";
             var auditLog = new AccountingActionLog
             {
                 Action = "MarkAsPaid",
@@ -312,6 +315,7 @@ namespace AdministratorWeb.Controllers
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
             };
             _context.AccountingActionLogs.Add(auditLog);
+            await _context.SaveChangesAsync();
 
             // Auto-generate receipt (for record keeping)
             try
@@ -324,8 +328,6 @@ namespace AdministratorWeb.Controllers
                 // Log error but don't fail the payment
                 TempData["Warning"] = $"Payment recorded successfully, but failed to generate receipt: {ex.Message}";
             }
-
-            await _context.SaveChangesAsync();
 
             return RedirectToAction(nameof(Outstanding));
         }
@@ -364,6 +366,27 @@ namespace AdministratorWeb.Controllers
             {
                 payment.LaundryRequest.IsPaid = false;
             }
+
+            // Create audit log for refund
+            var adminUser = await _context.Users.FindAsync(userId);
+            var auditLog = new AccountingActionLog
+            {
+                Action = "IssueRefund",
+                PaymentId = paymentId,
+                LaundryRequestId = payment.LaundryRequestId,
+                CustomerId = payment.CustomerId,
+                CustomerName = payment.CustomerName,
+                Amount = refundAmount,
+                OldStatus = "Completed",
+                NewStatus = "Refunded",
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                Details = $"Refund reason: {refundReason}" + (string.IsNullOrEmpty(notes) ? "" : $", Notes: {notes}"),
+                ActionedAt = DateTime.UtcNow,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+            };
+            _context.AccountingActionLogs.Add(auditLog);
 
             // NOTE: We do NOT create a SubtractRevenue adjustment here because the refunded
             // payment itself already subtracts from revenue in the sales report calculations.
