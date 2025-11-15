@@ -991,7 +991,16 @@ namespace AdministratorWeb.Controllers
 
                 // Debug: Get total count before filtering
                 var totalLogsInDb = await _context.RequestActionLogs.CountAsync();
-                _logger.LogInformation("RequestLogs accessed. Total logs in database: {Count}", totalLogsInDb);
+                _logger.LogInformation("RequestLogs accessed. Total logs in database: {Count}. SearchQuery: '{SearchQuery}', Action: '{Action}'",
+                    totalLogsInDb, searchQuery ?? "NULL", action ?? "NULL");
+
+                // Debug: Log first few records to see what's in there
+                var sampleLogs = await _context.RequestActionLogs.Take(3).ToListAsync();
+                foreach (var log in sampleLogs)
+                {
+                    _logger.LogInformation("Sample log - ID: {Id}, RequestId: {RequestId}, Customer: {Customer}, Action: {Action}, Performer: {Performer}",
+                        log.Id, log.RequestId, log.CustomerName, log.Action, log.PerformedByUserName ?? "NULL");
+                }
 
                 // Search by customer name, request ID, or admin name
                 if (!string.IsNullOrEmpty(searchQuery))
@@ -1015,16 +1024,35 @@ namespace AdministratorWeb.Controllers
                 query = query.OrderByDescending(l => l.ActionedAt);
 
                 // Get total count for pagination
-                var totalCount = await query.CountAsync();
+                int totalCount;
+                try
+                {
+                    totalCount = await query.CountAsync();
+                    _logger.LogInformation("RequestLogs query result: {FilteredCount} logs after filtering", totalCount);
+                }
+                catch (Exception countEx)
+                {
+                    _logger.LogError(countEx, "Error counting filtered logs");
+                    throw;
+                }
+
                 var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-                _logger.LogInformation("RequestLogs query result: {FilteredCount} logs after filtering", totalCount);
-
                 // Get current page
-                var logs = await query
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
+                List<RequestActionLog> logs;
+                try
+                {
+                    logs = await query
+                        .Skip((page - 1) * pageSize)
+                        .Take(pageSize)
+                        .ToListAsync();
+                    _logger.LogInformation("Successfully retrieved {Count} logs for current page", logs.Count);
+                }
+                catch (Exception queryEx)
+                {
+                    _logger.LogError(queryEx, "Error executing query to retrieve logs");
+                    throw;
+                }
 
                 ViewBag.SearchQuery = searchQuery;
                 ViewBag.CurrentAction = action;
