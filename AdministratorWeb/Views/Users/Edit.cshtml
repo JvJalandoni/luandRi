@@ -38,24 +38,15 @@
                         </div>
                     </div>
 
-                    <!-- Upload/Remove Controls -->
+                    <!-- Upload Controls -->
                     <div class="flex-1">
                         <input type="file" id="profilePictureInput" name="profilePicture" accept="image/*" class="hidden" />
-                        <input type="hidden" id="removeProfilePicture" name="removeProfilePicture" value="false" />
 
                         <div class="flex flex-wrap gap-2">
                             <button type="button" onclick="document.getElementById('profilePictureInput').click()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium inline-flex items-center">
                                 <i data-lucide="upload" class="w-4 h-4 mr-2"></i>
                                 Upload New Picture
                             </button>
-
-                            @if (!string.IsNullOrEmpty(Model.ProfilePicturePath))
-                            {
-                                <button type="button" id="removeButton" onclick="removeProfilePicture()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium inline-flex items-center">
-                                    <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
-                                    Remove Picture
-                                </button>
-                            }
                         </div>
                         <p class="text-gray-400 text-xs mt-2">Recommended: Square image, at least 200x200px. Max 5MB.</p>
                     </div>
@@ -198,54 +189,9 @@
                 reader.onload = function(event) {
                     const preview = document.getElementById('profilePicturePreview');
                     preview.innerHTML = '<img src="' + event.target.result + '" alt="Profile" class="w-full h-full object-cover" />';
-
-                    // Reset remove flag
-                    document.getElementById('removeProfilePicture').value = 'false';
-
-                    // Show remove button if not already visible
-                    const removeBtn = document.getElementById('removeButton');
-                    if (!removeBtn) {
-                        const btnContainer = document.querySelector('.flex.flex-wrap.gap-2');
-                        const newRemoveBtn = document.createElement('button');
-                        newRemoveBtn.type = 'button';
-                        newRemoveBtn.id = 'removeButton';
-                        newRemoveBtn.onclick = removeProfilePicture;
-                        newRemoveBtn.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium inline-flex items-center';
-                        newRemoveBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>Remove Picture';
-                        btnContainer.appendChild(newRemoveBtn);
-                        lucide.createIcons();
-                    }
                 };
                 reader.readAsDataURL(file);
             }
         });
-
-        function removeProfilePicture() {
-            if (!confirm('Are you sure you want to remove the profile picture?')) {
-                return;
-            }
-
-            // Clear file input
-            document.getElementById('profilePictureInput').value = '';
-
-            // Set remove flag
-            document.getElementById('removeProfilePicture').value = 'true';
-
-            // Show initials
-            const preview = document.getElementById('profilePicturePreview');
-            const firstName = document.querySelector('input[name="firstName"]').value || '';
-            const lastName = document.querySelector('input[name="lastName"]').value || '';
-            let initials = '?';
-            if (firstName && lastName) {
-                initials = (firstName[0] + lastName[0]).toUpperCase();
-            }
-            preview.innerHTML = '<span class="text-white font-semibold text-2xl">' + initials + '</span>';
-
-            // Hide remove button
-            const removeBtn = document.getElementById('removeButton');
-            if (removeBtn) {
-                removeBtn.remove();
-            }
-        }
     </script>
 }
