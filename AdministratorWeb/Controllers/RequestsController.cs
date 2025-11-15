@@ -985,21 +985,48 @@ namespace AdministratorWeb.Controllers
         /// </summary>
         public async Task<IActionResult> RequestLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
         {
-            // TEMP DEBUG: Just get ALL logs without any filtering
+            // Get all logs first, then filter in memory to avoid EF Core translation issues
             var allLogs = await _context.RequestActionLogs
                 .OrderByDescending(l => l.ActionedAt)
                 .ToListAsync();
 
-            _logger.LogInformation("RequestLogs: Found {Count} total logs in database", allLogs.Count);
+            var filteredLogs = allLogs.AsEnumerable();
+
+            // Search by customer name, request ID, or admin name
+            if (!string.IsNullOrEmpty(searchQuery))
+            {
+                var search = searchQuery.Trim().ToLower();
+                bool isNumeric = int.TryParse(search, out int requestId);
+
+                filteredLogs = filteredLogs.Where(l =>
+                    (l.CustomerName?.ToLower().Contains(search) ?? false) ||
+                    (l.PerformedByUserName?.ToLower().Contains(search) ?? false) ||
+                    (isNumeric && l.RequestId == requestId));
+            }
+
+            // Filter by action type
+            if (!string.IsNullOrEmpty(action))
+            {
+                filteredLogs = filteredLogs.Where(l => l.Action == action);
+            }
+
+            // Pagination
+            var totalCount = filteredLogs.Count();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            var logs = filteredLogs
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
 
             ViewBag.SearchQuery = searchQuery;
             ViewBag.CurrentAction = action;
-            ViewBag.CurrentPage = 1;
-            ViewBag.TotalPages = 1;
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = totalPages;
             ViewBag.PageSize = pageSize;
-            ViewBag.TotalCount = allLogs.Count;
+            ViewBag.TotalCount = totalCount;
 
-            return View(allLogs);
+            return View(logs);
         }
     }
 }

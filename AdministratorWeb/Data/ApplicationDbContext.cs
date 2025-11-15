@@ -22,6 +22,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Message> Messages { get; set; }
     public DbSet<ProfileUpdateLog> ProfileUpdateLogs { get; set; }
     public DbSet<RequestActionLog> RequestActionLogs { get; set; }
+    public DbSet<AccountingActionLog> AccountingActionLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -250,6 +251,48 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             // Composite index for request action history
             entity.HasIndex(e => new { e.RequestId, e.ActionedAt });
+
+            // Composite index for customer action history
+            entity.HasIndex(e => new { e.CustomerId, e.ActionedAt });
+        });
+
+        builder.Entity<AccountingActionLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.CustomerId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.CustomerName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Amount).HasPrecision(10, 2);
+            entity.Property(e => e.OldStatus).HasMaxLength(50);
+            entity.Property(e => e.NewStatus).HasMaxLength(50);
+            entity.Property(e => e.PaymentMethod).HasMaxLength(50);
+            entity.Property(e => e.AdjustmentType).HasMaxLength(50);
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.PerformedByUserId).HasMaxLength(450);
+            entity.Property(e => e.PerformedByUserName).HasMaxLength(100);
+            entity.Property(e => e.PerformedByUserEmail).HasMaxLength(256);
+            entity.Property(e => e.IpAddress).HasMaxLength(50);
+
+            // Create index on PaymentId for faster payment lookup
+            entity.HasIndex(e => e.PaymentId);
+
+            // Create index on LaundryRequestId for faster request lookup
+            entity.HasIndex(e => e.LaundryRequestId);
+
+            // Create index on AdjustmentId for faster adjustment lookup
+            entity.HasIndex(e => e.AdjustmentId);
+
+            // Create index on CustomerId for faster customer lookup
+            entity.HasIndex(e => e.CustomerId);
+
+            // Create index on ActionedAt for ordering
+            entity.HasIndex(e => e.ActionedAt);
+
+            // Create index on Action for filtering by action type
+            entity.HasIndex(e => e.Action);
+
+            // Composite index for payment action history
+            entity.HasIndex(e => new { e.PaymentId, e.ActionedAt });
 
             // Composite index for customer action history
             entity.HasIndex(e => new { e.CustomerId, e.ActionedAt });
