@@ -995,7 +995,7 @@ namespace AdministratorWeb.Controllers
 
                 query = query.Where(l =>
                     l.CustomerName.ToLower().Contains(search) ||
-                    l.PerformedByUserName.ToLower().Contains(search) ||
+                    (l.PerformedByUserName != null && l.PerformedByUserName.ToLower().Contains(search)) ||
                     (isNumeric && l.RequestId == requestId));
             }
 
