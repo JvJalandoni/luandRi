@@ -76,10 +76,10 @@ namespace AdministratorWeb.Data
             _logger.LogInformation("Seeding users...");
             var users = new[]
             {
-                new { Email = "admin1@laundry.com", FirstName = "Admin", LastName = "One", Role = "Administrator" },
-                new { Email = "admin2@laundry.com", FirstName = "Admin", LastName = "Two", Role = "Administrator" },
-                new { Email = "member1@laundry.com", FirstName = "Member", LastName = "One", Role = "Member" },
-                new { Email = "member2@laundry.com", FirstName = "Member", LastName = "Two", Role = "Member" }
+                new { Id = "seed-admin-1", Email = "admin1@laundry.com", FirstName = "Admin", LastName = "One", Role = "Administrator" },
+                new { Id = "seed-admin-2", Email = "admin2@laundry.com", FirstName = "Admin", LastName = "Two", Role = "Administrator" },
+                new { Id = "seed-member-1", Email = "member1@laundry.com", FirstName = "Member", LastName = "One", Role = "Member" },
+                new { Id = "seed-member-2", Email = "member2@laundry.com", FirstName = "Member", LastName = "Two", Role = "Member" }
             };
 
             var createdUsers = 0;
@@ -87,11 +87,18 @@ namespace AdministratorWeb.Data
 
             foreach (var userData in users)
             {
-                var existingUser = await _userManager.FindByEmailAsync(userData.Email);
+                // Check by ID first (primary check), then by email (fallback)
+                var existingUser = await _userManager.FindByIdAsync(userData.Id);
+                if (existingUser == null)
+                {
+                    existingUser = await _userManager.FindByEmailAsync(userData.Email);
+                }
+
                 if (existingUser == null)
                 {
                     var user = new ApplicationUser
                     {
+                        Id = userData.Id, // Hard-coded ID to prevent duplicates
                         UserName = userData.Email,
                         Email = userData.Email,
                         FirstName = userData.FirstName,
