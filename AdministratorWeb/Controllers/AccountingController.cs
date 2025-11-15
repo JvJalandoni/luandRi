@@ -1335,7 +1335,7 @@ namespace AdministratorWeb.Controllers
                 filteredLogs = filteredLogs.Where(l =>
                     (l.CustomerName?.ToLower().Contains(search) ?? false) ||
                     (l.PerformedByUserName?.ToLower().Contains(search) ?? false) ||
-                    (numericId && (l.PaymentId == numericId || l.LaundryRequestId == numericId || l.AdjustmentId == numericId)));
+                    (isNumeric && (l.PaymentId == numericId || l.LaundryRequestId == numericId || l.AdjustmentId == numericId)));
             }
 
             // Filter by action type
