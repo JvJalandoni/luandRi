@@ -34,31 +34,23 @@ namespace AdministratorWeb.Controllers
             var robots = await _robotService.GetAllRobotsAsync();
             var availableRobots = robots.Where(r => r.IsActive && !r.IsOffline).ToList();
 
-            // Get all customers (members only) for manual request creation - fetch directly from DB to avoid caching
-            var userManager = HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+            // Get all customers (members only) for manual request creation
+            var memberRoleId = await _context.Roles
+                .Where(r => r.Name == "Member")
+                .Select(r => r.Id)
+                .FirstOrDefaultAsync();
 
-            // Get all user IDs with Member role
-            var memberRoleId = await _context.Roles.Where(r => r.Name == "Member").Select(r => r.Id).FirstOrDefaultAsync();
             var memberUserIds = await _context.UserRoles
                 .Where(ur => ur.RoleId == memberRoleId)
                 .Select(ur => ur.UserId)
-                .Distinct()
                 .ToListAsync();
 
-            // Fetch fresh user data from database - use Distinct and AsNoTracking to ensure fresh data
+            // Simple direct query - fetch ALL members regardless of IsActive
             var customers = await _context.Users
-                .AsNoTracking()
                 .Where(u => memberUserIds.Contains(u.Id))
-                .GroupBy(u => u.Id)
-                .Select(g => g.First())
                 .OrderBy(u => u.FirstName)
                 .ThenBy(u => u.LastName)
                 .ToListAsync();
-
-            // DEBUG: Log what we're loading
-            _logger.LogInformation("Loading {Count} customers for dropdown: {Customers}",
-                customers.Count,
-                string.Join(", ", customers.Select(c => $"{c.Id}:{c.FullName}")));
 
             var dto = new RequestsIndexDto
             {
