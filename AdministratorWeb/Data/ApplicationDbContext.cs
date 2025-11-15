@@ -21,6 +21,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RobotState> RobotStates { get; set; }
     public DbSet<Message> Messages { get; set; }
     public DbSet<ProfileUpdateLog> ProfileUpdateLogs { get; set; }
+    public DbSet<AccountingActionLog> AccountingActionLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -214,6 +215,29 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             // Composite index for user update history
             entity.HasIndex(e => new { e.UserId, e.UpdatedAt });
+        });
+
+        builder.Entity<AccountingActionLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.CustomerId).HasMaxLength(450);
+            entity.Property(e => e.CustomerName).HasMaxLength(100);
+            entity.Property(e => e.Amount).HasPrecision(10, 2);
+            entity.Property(e => e.OldStatus).HasMaxLength(50);
+            entity.Property(e => e.NewStatus).HasMaxLength(50);
+            entity.Property(e => e.PerformedByUserId).HasMaxLength(450);
+            entity.Property(e => e.PerformedByUserName).HasMaxLength(100);
+            entity.Property(e => e.PerformedByUserEmail).HasMaxLength(256);
+            entity.Property(e => e.Details).HasMaxLength(1000);
+            entity.Property(e => e.IpAddress).HasMaxLength(50);
+
+            // Indexes for efficient queries
+            entity.HasIndex(e => e.PaymentId);
+            entity.HasIndex(e => e.AdjustmentId);
+            entity.HasIndex(e => e.CustomerId);
+            entity.HasIndex(e => e.ActionedAt);
+            entity.HasIndex(e => e.Action);
         });
     }
 }

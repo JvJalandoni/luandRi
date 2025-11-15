@@ -291,6 +291,28 @@ namespace AdministratorWeb.Controllers
 
             request.IsPaid = true;
 
+            // Create audit log
+            var adminUser = await _context.Users.FindAsync(userId);
+            var oldStatus = existingPayment != null ? existingPayment.Status.ToString() : "None";
+            var auditLog = new AccountingActionLog
+            {
+                Action = "MarkAsPaid",
+                PaymentId = paymentToReceipt.Id,
+                LaundryRequestId = requestId,
+                CustomerId = request.CustomerId,
+                CustomerName = request.CustomerName,
+                Amount = paymentToReceipt.Amount,
+                OldStatus = oldStatus,
+                NewStatus = PaymentStatus.Completed.ToString(),
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                Details = $"Payment method: {paymentMethod}" + (string.IsNullOrEmpty(notes) ? "" : $", Notes: {notes}"),
+                ActionedAt = DateTime.UtcNow,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+            };
+            _context.AccountingActionLogs.Add(auditLog);
+
             // Auto-generate receipt (for record keeping)
             try
             {
@@ -409,6 +431,27 @@ namespace AdministratorWeb.Controllers
 
             _context.Payments.Add(payment);
 
+            // Create audit log
+            var adminUser = await _context.Users.FindAsync(userId);
+            var auditLog = new AccountingActionLog
+            {
+                Action = "MarkAsPending",
+                PaymentId = payment.Id,
+                LaundryRequestId = requestId,
+                CustomerId = request.CustomerId,
+                CustomerName = request.CustomerName,
+                Amount = request.TotalCost!.Value,
+                OldStatus = null,
+                NewStatus = PaymentStatus.Pending.ToString(),
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                Details = $"Created pending payment for outstanding request" + (string.IsNullOrEmpty(notes) ? "" : $", Notes: {notes}"),
+                ActionedAt = DateTime.UtcNow,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+            };
+            _context.AccountingActionLogs.Add(auditLog);
+
             await _context.SaveChangesAsync();
 
             TempData["Success"] = "Payment marked as pending.";
@@ -427,7 +470,6 @@ namespace AdministratorWeb.Controllers
 
             var oldStatus = payment.Status.ToString();
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var adminUser = userId != null ? await _context.Users.FindAsync(userId) : null;
 
             payment.Status = PaymentStatus.Failed;
             payment.FailureReason = failureReason;
@@ -435,6 +477,27 @@ namespace AdministratorWeb.Controllers
             {
                 payment.Notes = (payment.Notes ?? "") + $"\nFailed: {notes}";
             }
+
+            // Create audit log
+            var adminUser = await _context.Users.FindAsync(userId);
+            var auditLog = new AccountingActionLog
+            {
+                Action = "MarkAsFailed",
+                PaymentId = paymentId,
+                LaundryRequestId = payment.LaundryRequestId,
+                CustomerId = payment.CustomerId,
+                CustomerName = payment.CustomerName,
+                Amount = payment.Amount,
+                OldStatus = oldStatus,
+                NewStatus = PaymentStatus.Failed.ToString(),
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                Details = $"Failure reason: {failureReason}" + (string.IsNullOrEmpty(notes) ? "" : $", Notes: {notes}"),
+                ActionedAt = DateTime.UtcNow,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+            };
+            _context.AccountingActionLogs.Add(auditLog);
 
             await _context.SaveChangesAsync();
 
@@ -454,7 +517,6 @@ namespace AdministratorWeb.Controllers
 
             var oldStatus = payment.Status.ToString();
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var adminUser = userId != null ? await _context.Users.FindAsync(userId) : null;
 
             payment.Status = PaymentStatus.Cancelled;
             payment.CancelledAt = DateTime.UtcNow;
@@ -464,6 +526,27 @@ namespace AdministratorWeb.Controllers
             {
                 payment.Notes = (payment.Notes ?? "") + $"\nCancelled: {notes}";
             }
+
+            // Create audit log
+            var adminUser = await _context.Users.FindAsync(userId);
+            var auditLog = new AccountingActionLog
+            {
+                Action = "CancelPayment",
+                PaymentId = paymentId,
+                LaundryRequestId = payment.LaundryRequestId,
+                CustomerId = payment.CustomerId,
+                CustomerName = payment.CustomerName,
+                Amount = payment.Amount,
+                OldStatus = oldStatus,
+                NewStatus = PaymentStatus.Cancelled.ToString(),
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                Details = $"Cancellation reason: {cancellationReason}" + (string.IsNullOrEmpty(notes) ? "" : $", Notes: {notes}"),
+                ActionedAt = DateTime.UtcNow,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+            };
+            _context.AccountingActionLogs.Add(auditLog);
 
             await _context.SaveChangesAsync();
 
@@ -614,6 +697,24 @@ namespace AdministratorWeb.Controllers
 
             _context.PaymentAdjustments.Add(adjustment);
 
+            // Create audit log
+            var adminUser = await _context.Users.FindAsync(userId);
+            var auditLog = new AccountingActionLog
+            {
+                Action = "CreateAdjustment",
+                AdjustmentId = adjustment.Id,
+                Amount = amount,
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                Details = $"Type: {type}, Description: {description}, Effective Date: {effectiveDate:yyyy-MM-dd}" +
+                         (string.IsNullOrEmpty(referenceNumber) ? "" : $", Reference: {referenceNumber}") +
+                         (string.IsNullOrEmpty(notes) ? "" : $", Notes: {notes}"),
+                ActionedAt = DateTime.UtcNow,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+            };
+            _context.AccountingActionLogs.Add(auditLog);
+
             await _context.SaveChangesAsync();
 
             TempData["Success"] = "Adjustment created successfully.";
@@ -629,6 +730,25 @@ namespace AdministratorWeb.Controllers
                 TempData["Error"] = "Adjustment not found.";
                 return RedirectToAction(nameof(Adjustments));
             }
+
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            // Create audit log before deletion
+            var adminUser = await _context.Users.FindAsync(userId);
+            var auditLog = new AccountingActionLog
+            {
+                Action = "DeleteAdjustment",
+                AdjustmentId = id,
+                Amount = adjustment.Amount,
+                PerformedByUserId = userId,
+                PerformedByUserName = adminUser?.FullName,
+                PerformedByUserEmail = adminUser?.Email,
+                Details = $"Deleted adjustment - Type: {adjustment.Type}, Amount: {adjustment.Amount:N2}, Description: {adjustment.Description}, Effective Date: {adjustment.EffectiveDate:yyyy-MM-dd}" +
+                         (string.IsNullOrEmpty(adjustment.ReferenceNumber) ? "" : $", Reference: {adjustment.ReferenceNumber}"),
+                ActionedAt = DateTime.UtcNow,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+            };
+            _context.AccountingActionLogs.Add(auditLog);
 
             _context.PaymentAdjustments.Remove(adjustment);
             await _context.SaveChangesAsync();
@@ -1182,6 +1302,52 @@ namespace AdministratorWeb.Controllers
             }
 
             return $"{prefix}-{sequence:D6}"; // RCP-2025-000001
+        }
+
+        /// <summary>
+        /// View accounting audit logs with pagination and filtering
+        /// </summary>
+        public async Task<IActionResult> AuditLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
+        {
+            var query = _context.AccountingActionLogs.AsQueryable();
+
+            // Apply search filter
+            if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                query = query.Where(l =>
+                    l.CustomerName.Contains(searchQuery) ||
+                    l.CustomerId.Contains(searchQuery) ||
+                    (l.PerformedByUserName != null && l.PerformedByUserName.Contains(searchQuery)) ||
+                    (l.PerformedByUserEmail != null && l.PerformedByUserEmail.Contains(searchQuery)));
+            }
+
+            // Apply action filter
+            if (!string.IsNullOrWhiteSpace(action))
+            {
+                query = query.Where(l => l.Action == action);
+            }
+
+            // Order by most recent first
+            query = query.OrderByDescending(l => l.ActionedAt);
+
+            // Get total count for pagination
+            var totalCount = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            // Get current page
+            var logs = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            ViewBag.SearchQuery = searchQuery ?? "";
+            ViewBag.CurrentAction = action ?? "";
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = totalPages;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalCount = totalCount;
+
+            return View(logs);
         }
 
     }
