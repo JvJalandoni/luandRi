@@ -147,6 +147,17 @@ namespace AdministratorWeb.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(string id, string firstName, string lastName, string email, string userName, string phoneNumber, string role, bool isActive, IFormFile? profilePicture = null, bool removeProfilePicture = false, string? assignedBeaconMacAddress = null, string? roomName = null, string? roomDescription = null, string newPassword = "")
         {
+            // DEBUG: Log all incoming parameters
+            Console.WriteLine("========================================");
+            Console.WriteLine("[USERS EDIT] REQUEST RECEIVED");
+            Console.WriteLine($"[USERS EDIT] ID: {id}");
+            Console.WriteLine($"[USERS EDIT] FirstName: {firstName}");
+            Console.WriteLine($"[USERS EDIT] LastName: {lastName}");
+            Console.WriteLine($"[USERS EDIT] Email: {email}");
+            Console.WriteLine($"[USERS EDIT] ProfilePicture: {(profilePicture != null ? $"YES ({profilePicture.Length} bytes, {profilePicture.FileName})" : "NULL")}");
+            Console.WriteLine($"[USERS EDIT] Content-Type: {Request.ContentType}");
+            Console.WriteLine("========================================");
+
             var user = await _userManager.FindByIdAsync(id);
             if (user == null)
             {
@@ -193,6 +204,8 @@ namespace AdministratorWeb.Controllers
             // Handle profile picture upload
             if (profilePicture != null && profilePicture.Length > 0)
             {
+                Console.WriteLine($"[USERS EDIT] Processing profile picture upload: {profilePicture.FileName} ({profilePicture.Length} bytes)");
+
                 // Delete old profile picture if exists
                 if (!string.IsNullOrEmpty(user.ProfilePicturePath))
                 {
@@ -200,6 +213,7 @@ namespace AdministratorWeb.Controllers
                     if (System.IO.File.Exists(oldProfilePath))
                     {
                         System.IO.File.Delete(oldProfilePath);
+                        Console.WriteLine($"[USERS EDIT] Deleted old profile picture: {oldProfilePath}");
                     }
                 }
 
@@ -216,6 +230,11 @@ namespace AdministratorWeb.Controllers
                 }
 
                 user.ProfilePicturePath = $"/uploads/profiles/{uniqueFileName}";
+                Console.WriteLine($"[USERS EDIT] ✅ Profile picture saved: {user.ProfilePicturePath}");
+            }
+            else
+            {
+                Console.WriteLine("[USERS EDIT] No profile picture in request");
             }
 
             // Update the user

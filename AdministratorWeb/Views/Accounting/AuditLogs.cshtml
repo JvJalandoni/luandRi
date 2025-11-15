@@ -10,13 +10,6 @@
 }
 
 @functions {
-    private string CleanIpAddress(string? ipAddress)
-    {
-        if (string.IsNullOrEmpty(ipAddress))
-            return "N/A";
-        return ipAddress.Replace("::ffff:", "");
-    }
-
     private (string bgClass, string textClass, string borderClass, string icon) GetActionStyle(string action)
     {
         return action switch
@@ -188,7 +181,6 @@
         @foreach (var log in Model)
         {
             var actionStyle = GetActionStyle(log.Action);
-            var cleanIp = CleanIpAddress(log.IpAddress);
 
             <div class="bg-slate-800/50 backdrop-blur-xl shadow-xl rounded-2xl border border-slate-700/50 overflow-hidden hover:border-slate-600/50 transition-all duration-200 group">
                 <div class="px-6 py-5">
@@ -319,11 +311,7 @@
                     }
 
                     <!-- Footer -->
-                    <div class="pt-4 border-t border-slate-700/50 flex items-center justify-between">
-                        <p class="text-xs text-slate-500 flex items-center">
-                            <i data-lucide="map-pin" class="w-3 h-3 mr-2"></i>
-                            IP Address: <span class="font-mono ml-1">@cleanIp</span>
-                        </p>
+                    <div class="pt-4 border-t border-slate-700/50 flex items-center justify-end space-x-4">
                         @if (log.PaymentId.HasValue)
                         {
                             <span class="text-xs text-slate-500 flex items-center">
@@ -419,6 +407,6 @@
 <!-- Version Number -->
 <div class="text-center mt-8 animate-slide-up" style="animation-delay: 0.5s;">
     <p class="text-xs text-slate-600">
-        Audit Logs v<span class="font-semibold">2.1</span>
+        Audit Logs v<span class="font-semibold">2.2</span>
     </p>
 </div>
