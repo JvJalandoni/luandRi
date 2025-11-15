@@ -38,7 +38,6 @@ namespace AdministratorWeb.Controllers
             var userManager = HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
             var allUsers = await userManager.GetUsersInRoleAsync("Member");
             var customers = allUsers
-                .Where(u => u.IsActive)
                 .OrderBy(u => u.FullName)
                 .ToList();
 
