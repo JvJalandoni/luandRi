@@ -32,6 +32,7 @@ export interface UpdateProfileRequest {
     name: string;
     type: string;
   };
+  currentPassword?: string; // Required when changing email
 }
 
 export interface NotificationSettings {
@@ -101,60 +102,52 @@ export const userService = {
   },
 
   async updateProfile(data: UpdateProfileRequest): Promise<{ success: boolean; message: string; profilePicturePath?: string }> {
-    // If profile picture is included, send as FormData (like admin profile)
-    // Otherwise send as JSON for text-only updates
+    // ALWAYS send as FormData because backend expects [FromForm]
+    console.log('📤 Updating profile via PUT /user/profile (FormData)');
+
+    // Get JWT token manually (same as messageService)
+    const token = await AsyncStorage.getItem('jwt_token');
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
+    const formData = new FormData();
+    formData.append('firstName', data.firstName);
+    formData.append('lastName', data.lastName);
+    formData.append('email', data.email);
+    if (data.phone) {
+      formData.append('phone', data.phone);
+    }
+
+    // Include current password if provided (required for email change)
+    if (data.currentPassword) {
+      formData.append('currentPassword', data.currentPassword);
+      console.log('🔒 Including current password for email change verification');
+    }
+
+    // Append file if provided
     if (data.profilePicture) {
-      console.log('📤 Updating profile WITH picture via PUT /user/profile (FormData - same as messageService)');
-
-      // Get JWT token manually (same as messageService)
-      const token = await AsyncStorage.getItem('jwt_token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      const formData = new FormData();
-      formData.append('firstName', data.firstName);
-      formData.append('lastName', data.lastName);
-      formData.append('email', data.email);
-      if (data.phone) {
-        formData.append('phone', data.phone);
-      }
-
-      // Append file same way as messageService does
       const file: any = {
         uri: data.profilePicture.uri,
         name: data.profilePicture.name,
         type: data.profilePicture.type,
       };
       formData.append('profilePicture', file);
-
-      console.log('📤 Sending FormData to PUT /user/profile with explicit multipart/form-data header');
-
-      // Use axios directly like messageService (bypass apiPut wrapper)
-      const response = await axios.put('http://140.245.51.90:23000/api/user/profile', formData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 10000
-      });
-
-      return response.data;
-    } else {
-      console.log('📤 Updating text fields ONLY via PUT /user/profile (JSON)');
-      // Send as JSON - NO profile picture
-      const response = await apiPut('/user/profile', {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        phone: data.phone
-      });
-
-      if (!response) {
-        throw new Error('Failed to update profile - no response');
-      }
-      return response.data;
+      console.log('📤 Including profile picture in FormData');
     }
+
+    console.log('📤 Sending FormData to PUT /user/profile with multipart/form-data');
+
+    // Use axios directly (bypass apiPut wrapper)
+    const response = await axios.put('http://140.245.51.90:23000/api/user/profile', formData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+      timeout: 10000
+    });
+
+    return response.data;
   },
 
   async getNotificationSettings(): Promise<NotificationSettings> {
@@ -195,8 +188,29 @@ export const userService = {
     favoriteTimeSlot?: string;
     lastRequest?: string;
   }> {
-    
+
     const response = await apiGet('/user/statistics');
+    return response.data;
+  },
+
+  async changePassword(data: { currentPassword: string; newPassword: string }): Promise<{ success: boolean; message: string }> {
+    console.log('🔒 Changing password via PUT /user/password');
+
+    // Get JWT token manually
+    const token = await AsyncStorage.getItem('jwt_token');
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
+    // Send as JSON
+    const response = await axios.put('http://140.245.51.90:23000/api/user/password', data, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000
+    });
+
     return response.data;
   }
 };

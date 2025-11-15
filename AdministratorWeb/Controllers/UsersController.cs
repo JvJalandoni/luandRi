@@ -291,6 +291,30 @@ namespace AdministratorWeb.Controllers
                 PasswordChanged = !string.IsNullOrWhiteSpace(newPassword)
             };
 
+            // Get current admin user info
+            var adminId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var adminUser = await _userManager.FindByIdAsync(adminId ?? "");
+
+            // Create audit log
+            var log = new ProfileUpdateLog
+            {
+                UserId = user.Id,
+                UserName = user.FullName,
+                UserEmail = user.Email,
+                UpdatedByUserId = adminUser?.Id,
+                UpdatedByUserName = adminUser?.FullName,
+                UpdatedByUserEmail = adminUser?.Email,
+                UpdateSource = "Admin",
+                OldValues = System.Text.Json.JsonSerializer.Serialize(oldValues),
+                NewValues = System.Text.Json.JsonSerializer.Serialize(newValues),
+                PasswordChanged = !string.IsNullOrWhiteSpace(newPassword),
+                ProfilePictureChanged = profilePicture != null || removeProfilePicture,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.ProfileUpdateLogs.Add(log);
+            await _context.SaveChangesAsync();
 
             TempData["Success"] = "User updated successfully.";
             return RedirectToAction(nameof(Index));
@@ -354,6 +378,56 @@ namespace AdministratorWeb.Controllers
             }
 
             return RedirectToAction(nameof(Index));
+        }
+
+        /// <summary>
+        /// View profile update logs with pagination and filters
+        /// </summary>
+        public async Task<IActionResult> ProfileLogs(string userId = "", string updateSource = "", int page = 1, int pageSize = 20)
+        {
+            var query = _context.ProfileUpdateLogs.AsQueryable();
+
+            // Filter by user
+            if (!string.IsNullOrEmpty(userId))
+            {
+                query = query.Where(l => l.UserId == userId);
+            }
+
+            // Filter by update source (MobileApp, Admin, Web)
+            if (!string.IsNullOrEmpty(updateSource))
+            {
+                query = query.Where(l => l.UpdateSource == updateSource);
+            }
+
+            // Order by most recent first
+            query = query.OrderByDescending(l => l.UpdatedAt);
+
+            // Get total count for pagination
+            var totalCount = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            // Get current page
+            var logs = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            // Get all users for filter dropdown
+            var users = await _userManager.Users
+                .OrderBy(u => u.FirstName)
+                .ThenBy(u => u.LastName)
+                .Select(u => new { u.Id, FullName = u.FirstName + " " + u.LastName })
+                .ToListAsync();
+
+            ViewBag.Users = users;
+            ViewBag.CurrentUserId = userId;
+            ViewBag.CurrentUpdateSource = updateSource;
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = totalPages;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalCount = totalCount;
+
+            return View(logs);
         }
     }
 }

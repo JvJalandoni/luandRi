@@ -1,0 +1,352 @@
+@model IEnumerable<AdministratorWeb.Models.ProfileUpdateLog>
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Profile Update Logs";
+    var users = ViewBag.Users as List<dynamic>;
+    var currentUserId = ViewBag.CurrentUserId as string;
+    var currentUpdateSource = ViewBag.CurrentUpdateSource as string;
+    var currentPage = (int)ViewBag.CurrentPage;
+    var totalPages = (int)ViewBag.TotalPages;
+    var totalCount = (int)ViewBag.TotalCount;
+}
+
+@functions {
+    private string CleanIpAddress(string? ipAddress)
+    {
+        if (string.IsNullOrEmpty(ipAddress))
+            return "N/A";
+
+        // Remove ::ffff: prefix
+        return ipAddress.Replace("::ffff:", "");
+    }
+
+    private Dictionary<string, object> ParseJsonChanges(string? oldJson, string? newJson)
+    {
+        var changes = new Dictionary<string, object>();
+
+        if (string.IsNullOrEmpty(oldJson) || string.IsNullOrEmpty(newJson))
+            return changes;
+
+        try
+        {
+            var oldValues = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(oldJson);
+            var newValues = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(newJson);
+
+            if (oldValues == null || newValues == null)
+                return changes;
+
+            foreach (var key in newValues.Keys)
+            {
+                if (key == "PasswordChanged") continue; // Skip internal flags
+
+                if (!oldValues.ContainsKey(key))
+                {
+                    changes[key] = new { Old = "", New = newValues[key].ToString() };
+                }
+                else if (oldValues[key].ToString() != newValues[key].ToString())
+                {
+                    changes[key] = new { Old = oldValues[key].ToString(), New = newValues[key].ToString() };
+                }
+            }
+        }
+        catch { }
+
+        return changes;
+    }
+
+    private string FormatFieldName(string fieldName)
+    {
+        // Convert camelCase/PascalCase to Title Case with spaces
+        return System.Text.RegularExpressions.Regex.Replace(fieldName, "([a-z])([A-Z])", "$1 $2");
+    }
+}
+
+<!-- Dashboard Header -->
+<div class="mb-8 animate-slide-up">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Profile Update Logs</h1>
+            <p class="text-slate-400 flex items-center">
+                <i data-lucide="history" class="w-4 h-4 mr-2"></i>
+                Track all profile changes and modifications
+            </p>
+        </div>
+        <a asp-action="Index" class="inline-flex items-center px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl border border-slate-600/50">
+            <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>
+            Back to Users
+        </a>
+    </div>
+</div>
+
+<!-- Filters Card -->
+<div class="bg-slate-800/50 backdrop-blur-xl shadow-xl rounded-2xl border border-slate-700/50 mb-6 animate-slide-up" style="animation-delay: 0.1s;">
+    <div class="px-6 py-5">
+        <form method="get" asp-action="ProfileLogs" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm font-semibold text-slate-300 mb-2 flex items-center">
+                    <i data-lucide="user" class="w-4 h-4 mr-2"></i>
+                    Filter by User
+                </label>
+                <select name="userId" class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all">
+                    <option value="">All Users</option>
+                    @foreach (var user in users ?? new List<dynamic>())
+                    {
+                        <option value="@user.Id" selected="@(user.Id == currentUserId)">
+                            @user.FullName
+                        </option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-slate-300 mb-2 flex items-center">
+                    <i data-lucide="tag" class="w-4 h-4 mr-2"></i>
+                    Filter by Source
+                </label>
+                <select name="updateSource" class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all">
+                    <option value="">All Sources</option>
+                    <option value="MobileApp" selected="@(currentUpdateSource == "MobileApp")">Mobile App (Self-Update)</option>
+                    <option value="Admin" selected="@(currentUpdateSource == "Admin")">Admin Update</option>
+                    <option value="Web" selected="@(currentUpdateSource == "Web")">Web Update</option>
+                </select>
+            </div>
+            <div class="flex items-end space-x-2">
+                <button type="submit" class="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl">
+                    <i data-lucide="filter" class="w-4 h-4 mr-2"></i>
+                    Apply
+                </button>
+                <a href="@Url.Action("ProfileLogs")" class="inline-flex items-center justify-center px-4 py-2.5 bg-slate-700/50 hover:bg-slate-600/50 text-white text-sm font-medium rounded-lg transition-all duration-200 border border-slate-600/50">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Results Summary -->
+@if (TempData["Success"] != null)
+{
+    <div class="mb-6 px-4 py-3 bg-emerald-900/30 border border-emerald-700/50 rounded-xl text-emerald-300 flex items-center animate-slide-up" style="animation-delay: 0.2s;">
+        <i data-lucide="check-circle" class="w-5 h-5 mr-3"></i>
+        @TempData["Success"]
+    </div>
+}
+
+<div class="mb-6 px-4 py-3 bg-blue-900/30 border border-blue-700/50 rounded-xl text-blue-300 flex items-center animate-slide-up" style="animation-delay: 0.2s;">
+    <i data-lucide="info" class="w-5 h-5 mr-3"></i>
+    Showing <span class="font-bold mx-1">@Model.Count()</span> of <span class="font-bold mx-1">@totalCount</span> total log entries
+</div>
+
+<!-- Logs Timeline -->
+<div class="space-y-4 animate-slide-up" style="animation-delay: 0.3s;">
+    @if (Model.Any())
+    {
+        @foreach (var log in Model)
+        {
+            var changes = ParseJsonChanges(log.OldValues, log.NewValues);
+            var cleanIp = CleanIpAddress(log.IpAddress);
+            var isSelfUpdate = log.UpdatedByUserId == log.UserId;
+
+            <div class="bg-slate-800/50 backdrop-blur-xl shadow-xl rounded-2xl border border-slate-700/50 overflow-hidden hover:border-slate-600/50 transition-all duration-200 group">
+                <div class="px-6 py-5">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-start space-x-4 flex-1">
+                            <!-- User Avatar -->
+                            <div class="flex-shrink-0">
+                                @await Component.InvokeAsync("UserAvatar", new { userId = log.UserId, userName = log.UserName, size = "h-12 w-12", textSize = "text-base" })
+                            </div>
+
+                            <!-- Log Info -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center space-x-2 mb-1">
+                                    <h3 class="text-lg font-bold text-white">@log.UserName</h3>
+                                    @if (isSelfUpdate)
+                                    {
+                                        <span class="px-2 py-0.5 text-xs font-semibold rounded-lg bg-blue-900/50 text-blue-300 border border-blue-700/50">
+                                            Self-Update
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="px-2 py-0.5 text-xs font-semibold rounded-lg bg-orange-900/50 text-orange-300 border border-orange-700/50">
+                                            Admin Update
+                                        </span>
+                                    }
+                                </div>
+                                <p class="text-sm text-slate-400 flex items-center">
+                                    <i data-lucide="mail" class="w-3 h-3 mr-1"></i>
+                                    @log.UserEmail
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Timestamp & Source -->
+                        <div class="text-right flex-shrink-0 ml-4">
+                            <div class="flex items-center justify-end space-x-2 mb-1">
+                                @if (log.UpdateSource == "MobileApp")
+                                {
+                                    <span class="px-3 py-1 text-xs font-semibold rounded-lg bg-blue-900/50 text-blue-300 border border-blue-700/50 flex items-center">
+                                        <i data-lucide="smartphone" class="w-3 h-3 mr-1"></i>
+                                        Mobile App
+                                    </span>
+                                }
+                                else if (log.UpdateSource == "Admin")
+                                {
+                                    <span class="px-3 py-1 text-xs font-semibold rounded-lg bg-purple-900/50 text-purple-300 border border-purple-700/50 flex items-center">
+                                        <i data-lucide="shield-check" class="w-3 h-3 mr-1"></i>
+                                        Admin Panel
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/50 flex items-center">
+                                        <i data-lucide="globe" class="w-3 h-3 mr-1"></i>
+                                        Web
+                                    </span>
+                                }
+                            </div>
+                            <p class="text-sm text-slate-400 flex items-center justify-end">
+                                <i data-lucide="clock" class="w-3 h-3 mr-1"></i>
+                                @log.UpdatedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Updated By (if not self-update) -->
+                    @if (!isSelfUpdate && !string.IsNullOrEmpty(log.UpdatedByUserName))
+                    {
+                        <div class="mb-4 px-4 py-2 bg-slate-700/30 rounded-lg border border-slate-600/30">
+                            <p class="text-sm text-slate-300 flex items-center">
+                                <i data-lucide="user-cog" class="w-4 h-4 mr-2 text-purple-400"></i>
+                                Updated by:
+                                <span class="font-semibold text-white ml-1">@log.UpdatedByUserName</span>
+                                <span class="text-slate-400 ml-2">(@log.UpdatedByUserEmail)</span>
+                            </p>
+                        </div>
+                    }
+
+                    <!-- Change Badges -->
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        @if (log.PasswordChanged)
+                        {
+                            <span class="px-3 py-1 text-xs font-semibold rounded-lg bg-red-900/50 text-red-300 border border-red-700/50 flex items-center">
+                                <i data-lucide="key" class="w-3 h-3 mr-1"></i>
+                                Password Changed
+                            </span>
+                        }
+                        @if (log.ProfilePictureChanged)
+                        {
+                            <span class="px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 flex items-center">
+                                <i data-lucide="image" class="w-3 h-3 mr-1"></i>
+                                Profile Picture Updated
+                            </span>
+                        }
+                        @if (changes.Count > 0)
+                        {
+                            <span class="px-3 py-1 text-xs font-semibold rounded-lg bg-indigo-900/50 text-indigo-300 border border-indigo-700/50 flex items-center">
+                                <i data-lucide="edit" class="w-3 h-3 mr-1"></i>
+                                @changes.Count Field@(changes.Count > 1 ? "s" : "") Modified
+                            </span>
+                        }
+                    </div>
+
+                    <!-- Changes Details -->
+                    @if (changes.Count > 0)
+                    {
+                        <div class="border-t border-slate-700/50 pt-4">
+                            <h4 class="text-sm font-semibold text-slate-300 mb-3 flex items-center">
+                                <i data-lucide="list" class="w-4 h-4 mr-2"></i>
+                                Changes Made:
+                            </h4>
+                            <div class="space-y-2">
+                                @foreach (var change in changes)
+                                {
+                                    var changeData = change.Value as dynamic;
+                                    var oldValue = changeData?.Old?.ToString() ?? "";
+                                    var newValue = changeData?.New?.ToString() ?? "";
+
+                                    // Skip empty or redundant changes
+                                    if (oldValue == newValue || (string.IsNullOrEmpty(oldValue) && string.IsNullOrEmpty(newValue)))
+                                        continue;
+
+                                    <div class="px-4 py-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-sm font-semibold text-slate-300">@FormatFieldName(change.Key)</span>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <div class="flex-1 px-3 py-2 bg-red-900/20 rounded-lg border border-red-800/30">
+                                                <p class="text-xs text-red-400 mb-1 font-semibold">From:</p>
+                                                <p class="text-sm text-red-300 font-mono break-all">
+                                                    @(string.IsNullOrEmpty(oldValue) ? "(empty)" : oldValue)
+                                                </p>
+                                            </div>
+                                            <div class="flex-shrink-0">
+                                                <i data-lucide="arrow-right" class="w-5 h-5 text-slate-400"></i>
+                                            </div>
+                                            <div class="flex-1 px-3 py-2 bg-emerald-900/20 rounded-lg border border-emerald-800/30">
+                                                <p class="text-xs text-emerald-400 mb-1 font-semibold">To:</p>
+                                                <p class="text-sm text-emerald-300 font-mono break-all">
+                                                    @(string.IsNullOrEmpty(newValue) ? "(empty)" : newValue)
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- IP Address -->
+                    <div class="mt-4 pt-4 border-t border-slate-700/50">
+                        <p class="text-xs text-slate-500 flex items-center">
+                            <i data-lucide="map-pin" class="w-3 h-3 mr-2"></i>
+                            IP Address: <span class="font-mono ml-1">@cleanIp</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="bg-slate-800/50 backdrop-blur-xl shadow-xl rounded-2xl border border-slate-700/50 overflow-hidden">
+            <div class="px-6 py-16 text-center">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-slate-700/50 rounded-full mb-4">
+                    <i data-lucide="inbox" class="w-8 h-8 text-slate-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">No logs found</h3>
+                <p class="text-slate-400">No profile update logs match your current filters</p>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Pagination -->
+@if (totalPages > 1)
+{
+    <nav class="mt-8 flex justify-center animate-slide-up" style="animation-delay: 0.4s;">
+        <div class="inline-flex items-center space-x-1 bg-slate-800/50 backdrop-blur-xl rounded-xl border border-slate-700/50 p-1.5">
+            <a href="@Url.Action("ProfileLogs", new { userId = currentUserId, updateSource = currentUpdateSource, page = currentPage - 1 })"
+               class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all @(currentPage == 1 ? "text-slate-500 cursor-not-allowed" : "text-white hover:bg-slate-700/50")">
+                <i data-lucide="chevron-left" class="w-4 h-4 mr-1"></i>
+                Previous
+            </a>
+
+            <div class="flex items-center space-x-1 px-2">
+                @for (int i = 1; i <= totalPages; i++)
+                {
+                    <a href="@Url.Action("ProfileLogs", new { userId = currentUserId, updateSource = currentUpdateSource, page = i })"
+                       class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium rounded-lg transition-all @(i == currentPage ? "bg-gradient-to-r from-brand-600 to-indigo-600 text-white shadow-lg" : "text-slate-300 hover:bg-slate-700/50")">
+                        @i
+                    </a>
+                }
+            </div>
+
+            <a href="@Url.Action("ProfileLogs", new { userId = currentUserId, updateSource = currentUpdateSource, page = currentPage + 1 })"
+               class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all @(currentPage == totalPages ? "text-slate-500 cursor-not-allowed" : "text-white hover:bg-slate-700/50")">
+                Next
+                <i data-lucide="chevron-right" class="w-4 h-4 ml-1"></i>
+            </a>
+        </div>
+    </nav>
+}

@@ -9,6 +9,7 @@ import {
         View,
         Image,
         ActivityIndicator,
+        Modal,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useCustomAlert } from '../../components/CustomAlert';
@@ -42,6 +43,17 @@ export default function ProfileScreen() {
         const [isLoading, setIsLoading] = useState(false);
         const [profilePicturePath, setProfilePicturePath] = useState<string | null>(null);
         const [isUploadingImage, setIsUploadingImage] = useState(false);
+        const [originalEmail, setOriginalEmail] = useState(''); // Track original email
+        const [showPasswordModal, setShowPasswordModal] = useState(false);
+        const [currentPassword, setCurrentPassword] = useState('');
+
+        // Change Password modal state
+        const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+        const [changePasswordData, setChangePasswordData] = useState({
+                currentPassword: '',
+                newPassword: '',
+                confirmPassword: ''
+        });
 
         const backgroundColor = useThemeColor({}, 'background');
         const textColor = useThemeColor({}, 'text');
@@ -89,6 +101,7 @@ export default function ProfileScreen() {
                         setFirstName(finalFirstName);
                         setLastName(finalLastName);
                         setEmail(finalEmail);
+                        setOriginalEmail(finalEmail); // Track original email
                         setPhone(finalPhone);
                         setProfilePicturePath(profile.profilePicturePath || null);
                 } catch (error) {
@@ -100,6 +113,7 @@ export default function ProfileScreen() {
                                 setFirstName(first || '');
                                 setLastName(lastParts.join(' ') || '');
                                 setEmail(user.email || '');
+                                setOriginalEmail(user.email || ''); // Track original email
                                 setPhone(user.phone || '');
                                 setProfilePicturePath(user.profilePicturePath || null);
                         }
@@ -180,6 +194,24 @@ export default function ProfileScreen() {
                 const finalLastName = lastName.trim() || lastParts.join(' ') || '';
                 const finalEmail = email.trim() || user?.email || 'noemail@example.com';
 
+                // Check if email has changed - require password confirmation
+                if (finalEmail.toLowerCase() !== originalEmail.toLowerCase()) {
+                        console.log('🔒 Email changed - showing password confirmation');
+                        setShowPasswordModal(true);
+                        return;
+                }
+
+                // No email change - proceed normally
+                await saveProfile();
+        };
+
+        const saveProfile = async (password?: string) => {
+                const [first, ...lastParts] = user?.customerName?.split(' ') || ['User', ''];
+
+                const finalFirstName = firstName.trim() || first || 'User';
+                const finalLastName = lastName.trim() || lastParts.join(' ') || '';
+                const finalEmail = email.trim() || user?.email || 'noemail@example.com';
+
                 setIsLoading(true);
                 try {
                         const result = await userService.updateProfile({
@@ -187,13 +219,24 @@ export default function ProfileScreen() {
                                 lastName: finalLastName,
                                 email: finalEmail,
                                 phone: phone.trim() || undefined,
+                                currentPassword: password, // Send password if email changed
                         });
 
                         await refreshProfile(); // Refresh to show updated data
                         showAlert('Success', 'Profile updated successfully');
                         setIsEditing(false);
+                        setShowPasswordModal(false);
+                        setCurrentPassword('');
                 } catch (error: any) {
-                        showAlert('Error', error.response?.data?.message || 'Failed to update profile');
+                        const errorMsg = error.response?.data?.message || 'Failed to update profile';
+                        showAlert('Error', errorMsg);
+
+                        // If password was wrong, keep modal open
+                        if (errorMsg.toLowerCase().includes('password')) {
+                                setCurrentPassword(''); // Clear password field
+                        } else {
+                                setShowPasswordModal(false);
+                        }
                 } finally {
                         setIsLoading(false);
                 }
@@ -202,6 +245,53 @@ export default function ProfileScreen() {
         const handleCancel = () => {
                 setIsEditing(false);
                 loadProfile(); // Reset to original values
+        };
+
+        /**
+         * Handles password change
+         * Validates new password and confirm password match
+         * Sends change password request to backend with audit logging
+         */
+        const handleChangePassword = async () => {
+                const { currentPassword: currPass, newPassword, confirmPassword } = changePasswordData;
+
+                // Validation
+                if (!currPass.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+                        showAlert('Error', 'All password fields are required');
+                        return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                        showAlert('Error', 'New password and confirm password do not match');
+                        return;
+                }
+
+                if (newPassword.length < 6) {
+                        showAlert('Error', 'New password must be at least 6 characters long');
+                        return;
+                }
+
+                setIsLoading(true);
+                try {
+                        const result = await userService.changePassword({
+                                currentPassword: currPass,
+                                newPassword: newPassword
+                        });
+
+                        showAlert('Success', result.message || 'Password changed successfully');
+                        setShowChangePasswordModal(false);
+                        setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                } catch (error: any) {
+                        const errorMsg = error.response?.data?.message || 'Failed to change password';
+                        showAlert('Error', errorMsg);
+
+                        // If current password was wrong, clear only that field
+                        if (errorMsg.toLowerCase().includes('current password')) {
+                                setChangePasswordData(prev => ({ ...prev, currentPassword: '' }));
+                        }
+                } finally {
+                        setIsLoading(false);
+                }
         };
 
         const handleLogout = () => {
@@ -377,12 +467,156 @@ export default function ProfileScreen() {
                                         </View>
                                 </View>
 
+                                {/* Security Section */}
+                                <View style={[styles.section, { backgroundColor: cardColor }]}>
+                                        <ThemedText style={styles.sectionTitle}>Security</ThemedText>
+                                        <TouchableOpacity
+                                                style={[styles.changePasswordButton, { backgroundColor: secondaryColor }]}
+                                                onPress={() => setShowChangePasswordModal(true)}
+                                        >
+                                                <Text style={styles.changePasswordButtonText}>Change Password</Text>
+                                        </TouchableOpacity>
+                                </View>
+
                                 <View style={[styles.section, { backgroundColor: cardColor }]}>
                                         <TouchableOpacity style={[styles.logoutButton, { backgroundColor: dangerColor }]} onPress={handleLogout}>
                                                 <Text style={styles.logoutButtonText}>Logout</Text>
                                         </TouchableOpacity>
                                 </View>
                         </ScrollView>
+
+                        {/* Password Confirmation Modal */}
+                        <Modal
+                                visible={showPasswordModal}
+                                transparent={true}
+                                animationType="fade"
+                                onRequestClose={() => {
+                                        setShowPasswordModal(false);
+                                        setCurrentPassword('');
+                                }}
+                        >
+                                <View style={styles.modalOverlay}>
+                                        <View style={[styles.modalContent, { backgroundColor: cardColor }]}>
+                                                <Text style={[styles.modalTitle, { color: textColor }]}>
+                                                        Confirm Password
+                                                </Text>
+                                                <Text style={[styles.modalDescription, { color: mutedColor }]}>
+                                                        You are changing your email address. Please enter your current password to confirm.
+                                                </Text>
+
+                                                <TextInput
+                                                        style={[styles.modalInput, { borderColor, color: textColor }]}
+                                                        placeholder="Current Password"
+                                                        placeholderTextColor={mutedColor}
+                                                        secureTextEntry
+                                                        value={currentPassword}
+                                                        onChangeText={setCurrentPassword}
+                                                        autoFocus
+                                                />
+
+                                                <View style={styles.modalButtons}>
+                                                        <TouchableOpacity
+                                                                style={[styles.modalButton, styles.cancelButton, { backgroundColor: mutedColor }]}
+                                                                onPress={() => {
+                                                                        setShowPasswordModal(false);
+                                                                        setCurrentPassword('');
+                                                                }}
+                                                                disabled={isLoading}
+                                                        >
+                                                                <Text style={styles.modalButtonText}>Cancel</Text>
+                                                        </TouchableOpacity>
+
+                                                        <TouchableOpacity
+                                                                style={[styles.modalButton, { backgroundColor: primaryColor }]}
+                                                                onPress={() => saveProfile(currentPassword)}
+                                                                disabled={isLoading || !currentPassword.trim()}
+                                                        >
+                                                                {isLoading ? (
+                                                                        <ActivityIndicator color="#fff" />
+                                                                ) : (
+                                                                        <Text style={styles.modalButtonText}>Confirm</Text>
+                                                                )}
+                                                        </TouchableOpacity>
+                                                </View>
+                                        </View>
+                                </View>
+                        </Modal>
+
+                        {/* Change Password Modal */}
+                        <Modal
+                                visible={showChangePasswordModal}
+                                transparent={true}
+                                animationType="fade"
+                                onRequestClose={() => {
+                                        setShowChangePasswordModal(false);
+                                        setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                                }}
+                        >
+                                <View style={styles.modalOverlay}>
+                                        <View style={[styles.modalContent, { backgroundColor: cardColor }]}>
+                                                <Text style={[styles.modalTitle, { color: textColor }]}>
+                                                        Change Password
+                                                </Text>
+                                                <Text style={[styles.modalDescription, { color: mutedColor }]}>
+                                                        Enter your current password and choose a new password.
+                                                </Text>
+
+                                                <TextInput
+                                                        style={[styles.modalInput, { borderColor, color: textColor }]}
+                                                        placeholder="Current Password"
+                                                        placeholderTextColor={mutedColor}
+                                                        secureTextEntry
+                                                        value={changePasswordData.currentPassword}
+                                                        onChangeText={(text) => setChangePasswordData(prev => ({ ...prev, currentPassword: text }))}
+                                                        autoFocus
+                                                />
+
+                                                <TextInput
+                                                        style={[styles.modalInput, { borderColor, color: textColor }]}
+                                                        placeholder="New Password"
+                                                        placeholderTextColor={mutedColor}
+                                                        secureTextEntry
+                                                        value={changePasswordData.newPassword}
+                                                        onChangeText={(text) => setChangePasswordData(prev => ({ ...prev, newPassword: text }))}
+                                                />
+
+                                                <TextInput
+                                                        style={[styles.modalInput, { borderColor, color: textColor }]}
+                                                        placeholder="Confirm New Password"
+                                                        placeholderTextColor={mutedColor}
+                                                        secureTextEntry
+                                                        value={changePasswordData.confirmPassword}
+                                                        onChangeText={(text) => setChangePasswordData(prev => ({ ...prev, confirmPassword: text }))}
+                                                />
+
+                                                <View style={styles.modalButtons}>
+                                                        <TouchableOpacity
+                                                                style={[styles.modalButton, styles.cancelButton, { backgroundColor: mutedColor }]}
+                                                                onPress={() => {
+                                                                        setShowChangePasswordModal(false);
+                                                                        setChangePasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                                                                }}
+                                                                disabled={isLoading}
+                                                        >
+                                                                <Text style={styles.modalButtonText}>Cancel</Text>
+                                                        </TouchableOpacity>
+
+                                                        <TouchableOpacity
+                                                                style={[styles.modalButton, { backgroundColor: primaryColor }]}
+                                                                onPress={handleChangePassword}
+                                                                disabled={isLoading || !changePasswordData.currentPassword.trim() || !changePasswordData.newPassword.trim() || !changePasswordData.confirmPassword.trim()}
+                                                        >
+                                                                {isLoading ? (
+                                                                        <ActivityIndicator color="#fff" />
+                                                                ) : (
+                                                                        <Text style={styles.modalButtonText}>Change Password</Text>
+                                                                )}
+                                                        </TouchableOpacity>
+                                                </View>
+                                        </View>
+                                </View>
+                        </Modal>
+
                         <AlertComponent />
                 </ThemedView>
         );
@@ -532,6 +766,17 @@ const styles = StyleSheet.create({
         menuItemArrow: {
                 fontSize: 18,
         },
+        changePasswordButton: {
+                borderRadius: 8,
+                padding: 16,
+                alignItems: 'center',
+                marginTop: 12,
+        },
+        changePasswordButtonText: {
+                color: '#ffffff',
+                fontSize: 16,
+                fontWeight: '600',
+        },
         logoutButton: {
                 borderRadius: 8,
                 padding: 16,
@@ -539,6 +784,58 @@ const styles = StyleSheet.create({
         },
         logoutButtonText: {
                 color: '#ffffff',
+                fontSize: 16,
+                fontWeight: '600',
+        },
+        modalOverlay: {
+                flex: 1,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                justifyContent: 'center',
+                alignItems: 'center',
+        },
+        modalContent: {
+                width: '85%',
+                borderRadius: 12,
+                padding: 24,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 4,
+                elevation: 5,
+        },
+        modalTitle: {
+                fontSize: 20,
+                fontWeight: '700',
+                marginBottom: 12,
+        },
+        modalDescription: {
+                fontSize: 14,
+                marginBottom: 20,
+                lineHeight: 20,
+        },
+        modalInput: {
+                borderWidth: 1,
+                borderRadius: 8,
+                padding: 12,
+                fontSize: 16,
+                marginBottom: 20,
+        },
+        modalButtons: {
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                gap: 12,
+        },
+        modalButton: {
+                flex: 1,
+                padding: 14,
+                borderRadius: 8,
+                alignItems: 'center',
+        },
+        cancelButton: {
+                opacity: 0.7,
+        },
+        modalButtonText: {
+                color: '#fff',
                 fontSize: 16,
                 fontWeight: '600',
         },

@@ -20,6 +20,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Room> Rooms { get; set; }
     public DbSet<RobotState> RobotStates { get; set; }
     public DbSet<Message> Messages { get; set; }
+    public DbSet<ProfileUpdateLog> ProfileUpdateLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -191,6 +192,28 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             // Composite index for customer conversations
             entity.HasIndex(e => new { e.CustomerId, e.SentAt });
+        });
+
+        builder.Entity<ProfileUpdateLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.UserName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.UserEmail).HasMaxLength(256);
+            entity.Property(e => e.UpdatedByUserId).HasMaxLength(450);
+            entity.Property(e => e.UpdatedByUserName).HasMaxLength(100);
+            entity.Property(e => e.UpdatedByUserEmail).HasMaxLength(256);
+            entity.Property(e => e.UpdateSource).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.IpAddress).HasMaxLength(50);
+
+            // Create index on UserId for faster user lookup
+            entity.HasIndex(e => e.UserId);
+
+            // Create index on UpdatedAt for ordering
+            entity.HasIndex(e => e.UpdatedAt);
+
+            // Composite index for user update history
+            entity.HasIndex(e => new { e.UserId, e.UpdatedAt });
         });
     }
 }
