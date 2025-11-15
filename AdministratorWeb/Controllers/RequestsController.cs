@@ -34,30 +34,10 @@ namespace AdministratorWeb.Controllers
             var robots = await _robotService.GetAllRobotsAsync();
             var availableRobots = robots.Where(r => r.IsActive && !r.IsOffline).ToList();
 
-            // Get all customers (members only) for manual request creation
-            var memberRoleId = await _context.Roles
-                .Where(r => r.Name == "Member")
-                .Select(r => r.Id)
-                .FirstOrDefaultAsync();
-
-            var memberUserIds = await _context.UserRoles
-                .Where(ur => ur.RoleId == memberRoleId)
-                .Select(ur => ur.UserId)
-                .Distinct()
-                .ToListAsync();
-
-            // Simple direct query - fetch ALL members regardless of IsActive
-            var customers = await _context.Users
-                .Where(u => memberUserIds.Contains(u.Id))
-                .OrderBy(u => u.FirstName)
-                .ThenBy(u => u.LastName)
-                .ToListAsync();
-
-            // DEBUG LOG
-            _logger.LogWarning("CUSTOMER DROPDOWN DEBUG: Found {Count} customers. IDs: {Ids}. Names: {Names}",
-                customers.Count,
-                string.Join(", ", customers.Select(c => c.Id)),
-                string.Join(", ", customers.Select(c => $"{c.FullName}[{c.Email}][Active:{c.IsActive}]")));
+            // Get all customers (members only) for manual request creation - same way as /users does it
+            var userManager = HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+            var allMembers = await userManager.GetUsersInRoleAsync("Member");
+            var customers = allMembers.OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ToList();
 
             var dto = new RequestsIndexDto
             {
