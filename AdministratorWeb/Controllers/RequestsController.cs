@@ -985,47 +985,63 @@ namespace AdministratorWeb.Controllers
         /// </summary>
         public async Task<IActionResult> RequestLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
         {
-            var query = _context.RequestActionLogs.AsQueryable();
-
-            // Search by customer name, request ID, or admin name
-            if (!string.IsNullOrEmpty(searchQuery))
+            try
             {
-                var search = searchQuery.Trim().ToLower();
-                bool isNumeric = int.TryParse(search, out int requestId);
+                var query = _context.RequestActionLogs.AsQueryable();
 
-                query = query.Where(l =>
-                    l.CustomerName.ToLower().Contains(search) ||
-                    (l.PerformedByUserName != null && l.PerformedByUserName.ToLower().Contains(search)) ||
-                    (isNumeric && l.RequestId == requestId));
+                // Debug: Get total count before filtering
+                var totalLogsInDb = await _context.RequestActionLogs.CountAsync();
+                _logger.LogInformation("RequestLogs accessed. Total logs in database: {Count}", totalLogsInDb);
+
+                // Search by customer name, request ID, or admin name
+                if (!string.IsNullOrEmpty(searchQuery))
+                {
+                    var search = searchQuery.Trim().ToLower();
+                    bool isNumeric = int.TryParse(search, out int requestId);
+
+                    query = query.Where(l =>
+                        l.CustomerName.ToLower().Contains(search) ||
+                        (l.PerformedByUserName != null && l.PerformedByUserName.ToLower().Contains(search)) ||
+                        (isNumeric && l.RequestId == requestId));
+                }
+
+                // Filter by action type (Accept, Decline, Complete, ManualCreate, ForceCancelAll)
+                if (!string.IsNullOrEmpty(action))
+                {
+                    query = query.Where(l => l.Action == action);
+                }
+
+                // Order by most recent first
+                query = query.OrderByDescending(l => l.ActionedAt);
+
+                // Get total count for pagination
+                var totalCount = await query.CountAsync();
+                var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                _logger.LogInformation("RequestLogs query result: {FilteredCount} logs after filtering", totalCount);
+
+                // Get current page
+                var logs = await query
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                ViewBag.SearchQuery = searchQuery;
+                ViewBag.CurrentAction = action;
+                ViewBag.CurrentPage = page;
+                ViewBag.TotalPages = totalPages;
+                ViewBag.PageSize = pageSize;
+                ViewBag.TotalCount = totalCount;
+                ViewBag.TotalLogsInDb = totalLogsInDb; // Debug info
+
+                return View(logs);
             }
-
-            // Filter by action type (Accept, Decline, Complete, ManualCreate, ForceCancelAll)
-            if (!string.IsNullOrEmpty(action))
+            catch (Exception ex)
             {
-                query = query.Where(l => l.Action == action);
+                _logger.LogError(ex, "Error loading request logs");
+                TempData["Error"] = $"Error loading logs: {ex.Message}";
+                return RedirectToAction(nameof(Index));
             }
-
-            // Order by most recent first
-            query = query.OrderByDescending(l => l.ActionedAt);
-
-            // Get total count for pagination
-            var totalCount = await query.CountAsync();
-            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-
-            // Get current page
-            var logs = await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            ViewBag.SearchQuery = searchQuery;
-            ViewBag.CurrentAction = action;
-            ViewBag.CurrentPage = page;
-            ViewBag.TotalPages = totalPages;
-            ViewBag.PageSize = pageSize;
-            ViewBag.TotalCount = totalCount;
-
-            return View(logs);
         }
     }
 }
