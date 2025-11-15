@@ -312,10 +312,32 @@ namespace AdministratorWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            var oldStatus = request.Status.ToString();
+            var adminUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var adminUser = adminUserId != null ? await _context.Users.FindAsync(adminUserId) : null;
+
             try
             {
                 request.Status = RequestStatus.FinishedWashing;
                 request.ProcessedAt = DateTime.UtcNow;
+
+                // Create audit log
+                var log = new RequestActionLog
+                {
+                    RequestId = requestId,
+                    CustomerId = request.CustomerId,
+                    CustomerName = request.CustomerName,
+                    Action = "MarkForPickup",
+                    PerformedByUserId = adminUserId,
+                    PerformedByUserName = adminUser?.FullName,
+                    PerformedByUserEmail = adminUser?.Email,
+                    OldStatus = oldStatus,
+                    NewStatus = RequestStatus.FinishedWashing.ToString(),
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    ActionedAt = DateTime.UtcNow,
+                    Notes = "Laundry finished washing, ready for pickup/delivery"
+                };
+                _context.RequestActionLogs.Add(log);
 
                 await _context.SaveChangesAsync();
 
@@ -364,9 +386,31 @@ namespace AdministratorWeb.Controllers
 
             try
             {
+                var oldStatus = request.Status.ToString();
+                var adminUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var adminUser = adminUserId != null ? await _context.Users.FindAsync(adminUserId) : null;
+
                 // Change status to GoingToRoom so robot starts moving
                 request.Status = RequestStatus.FinishedWashingGoingToRoom;
                 request.ProcessedAt = DateTime.UtcNow;
+
+                // Create audit log
+                var log = new RequestActionLog
+                {
+                    RequestId = requestId,
+                    CustomerId = request.CustomerId,
+                    CustomerName = request.CustomerName,
+                    Action = "StartDelivery",
+                    PerformedByUserId = adminUserId,
+                    PerformedByUserName = adminUser?.FullName,
+                    PerformedByUserEmail = adminUser?.Email,
+                    OldStatus = oldStatus,
+                    NewStatus = RequestStatus.FinishedWashingGoingToRoom.ToString(),
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    ActionedAt = DateTime.UtcNow,
+                    Notes = "Delivery started - robot dispatched to customer room"
+                };
+                _context.RequestActionLogs.Add(log);
 
                 await _context.SaveChangesAsync();
 
