@@ -68,6 +68,9 @@ namespace AdministratorWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            var oldStatus = request.Status.ToString();
+            var adminUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var adminUser = adminUserId != null ? await _context.Users.FindAsync(adminUserId) : null;
 
             try
             {
@@ -82,7 +85,7 @@ namespace AdministratorWeb.Controllers
                 // Update request
                 request.Status = RequestStatus.Accepted;
                 request.AssignedRobotName = assignedRobot.Name;
-                request.HandledById = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                request.HandledById = adminUserId;
                 request.ProcessedAt = DateTime.UtcNow;
                 request.AcceptedAt = DateTime.UtcNow;
 
@@ -95,11 +98,31 @@ namespace AdministratorWeb.Controllers
                     "Request {RequestId} beacon assignment: User {CustomerId} has beacon {UserBeacon}, assigned to request: {RequestBeacon}",
                     requestId, request.CustomerId, user?.AssignedBeaconMacAddress ?? "None",
                     request.AssignedBeaconMacAddress ?? "None");
-                
+
 
                 // Update robot status
                 assignedRobot.Status = RobotStatus.Busy;
                 assignedRobot.CurrentTask = $"Handling request #{requestId}";
+
+                // Create audit log
+                var log = new RequestActionLog
+                {
+                    RequestId = requestId,
+                    CustomerId = request.CustomerId,
+                    CustomerName = request.CustomerName,
+                    Action = "Accept",
+                    PerformedByUserId = adminUserId,
+                    PerformedByUserName = adminUser?.FullName,
+                    PerformedByUserEmail = adminUser?.Email,
+                    OldStatus = oldStatus,
+                    NewStatus = RequestStatus.Accepted.ToString(),
+                    AssignedRobotName = assignedRobot.Name,
+                    TotalCost = request.TotalCost,
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    ActionedAt = DateTime.UtcNow,
+                    Notes = $"Robot {assignedRobot.Name} dispatched to {user?.RoomName}"
+                };
+                _context.RequestActionLogs.Add(log);
 
                 await _context.SaveChangesAsync();
 
@@ -115,8 +138,6 @@ namespace AdministratorWeb.Controllers
                     "Request {RequestId} accepted, robot {RobotName} dispatched to beacon {BeaconMac}",
                     requestId, assignedRobot.Name, request.AssignedBeaconMacAddress);
 
-                // Log to audit trail
-
                 TempData["Success"] =
                     $"Request #{requestId} accepted, robot {assignedRobot.Name} dispatched to {user?.RoomName}. Cost: ${request.TotalCost:F2}";
             }
@@ -124,8 +145,6 @@ namespace AdministratorWeb.Controllers
             {
                 _logger.LogError(ex, "Error accepting request {RequestId}", requestId);
                 TempData["Error"] = "An error occurred while processing the request.";
-
-                // Log failed action
             }
 
             return RedirectToAction(nameof(Index));
@@ -141,19 +160,39 @@ namespace AdministratorWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            var oldStatus = request.Status.ToString();
+            var adminUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var adminUser = adminUserId != null ? await _context.Users.FindAsync(adminUserId) : null;
+
             try
             {
                 request.Status = RequestStatus.Declined;
                 request.DeclineReason = reason ?? "No reason provided";
-                request.HandledById = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                request.HandledById = adminUserId;
                 request.ProcessedAt = DateTime.UtcNow;
+
+                // Create audit log
+                var log = new RequestActionLog
+                {
+                    RequestId = requestId,
+                    CustomerId = request.CustomerId,
+                    CustomerName = request.CustomerName,
+                    Action = "Decline",
+                    PerformedByUserId = adminUserId,
+                    PerformedByUserName = adminUser?.FullName,
+                    PerformedByUserEmail = adminUser?.Email,
+                    OldStatus = oldStatus,
+                    NewStatus = RequestStatus.Declined.ToString(),
+                    Reason = reason ?? "No reason provided",
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    ActionedAt = DateTime.UtcNow
+                };
+                _context.RequestActionLogs.Add(log);
 
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Request {RequestId} declined by user {UserId} with reason: {Reason}",
                     requestId, User.Identity?.Name, reason);
-
-                // Log to audit trail
 
                 TempData["Success"] = $"Request #{requestId} declined.";
             }
@@ -161,8 +200,6 @@ namespace AdministratorWeb.Controllers
             {
                 _logger.LogError(ex, "Error declining request {RequestId}", requestId);
                 TempData["Error"] = "An error occurred while processing the request.";
-
-                // Log failed action
             }
 
             return RedirectToAction(nameof(Index));
@@ -180,12 +217,17 @@ namespace AdministratorWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            var oldStatus = request.Status.ToString();
+            var adminUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var adminUser = adminUserId != null ? await _context.Users.FindAsync(adminUserId) : null;
+
             try
             {
                 request.Status = RequestStatus.Completed;
                 request.CompletedAt = DateTime.UtcNow;
 
                 // Free up the robot
+                string? freedRobotName = null;
                 if (!string.IsNullOrEmpty(request.AssignedRobotName))
                 {
                     var robot = await _robotService.GetRobotAsync(request.AssignedRobotName);
@@ -193,6 +235,7 @@ namespace AdministratorWeb.Controllers
                     {
                         robot.Status = RobotStatus.Available;
                         robot.CurrentTask = null;
+                        freedRobotName = robot.Name;
                     }
                 }
 
@@ -209,7 +252,7 @@ namespace AdministratorWeb.Controllers
                         Status = PaymentStatus.Pending,
                         TransactionId = $"PEND_{DateTime.UtcNow:yyyyMMdd}_{Guid.NewGuid().ToString("N")[..8].ToUpper()}",
                         Notes = "Auto-created pending payment on request completion",
-                        ProcessedByUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                        ProcessedByUserId = adminUserId
                     };
 
                     _context.Payments.Add(payment);
@@ -218,12 +261,30 @@ namespace AdministratorWeb.Controllers
                         requestId, request.TotalCost.Value);
                 }
 
+                // Create audit log
+                var log = new RequestActionLog
+                {
+                    RequestId = requestId,
+                    CustomerId = request.CustomerId,
+                    CustomerName = request.CustomerName,
+                    Action = "Complete",
+                    PerformedByUserId = adminUserId,
+                    PerformedByUserName = adminUser?.FullName,
+                    PerformedByUserEmail = adminUser?.Email,
+                    OldStatus = oldStatus,
+                    NewStatus = RequestStatus.Completed.ToString(),
+                    AssignedRobotName = freedRobotName,
+                    TotalCost = request.TotalCost,
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    ActionedAt = DateTime.UtcNow,
+                    Notes = $"Pending payment created for ${request.TotalCost:F2}"
+                };
+                _context.RequestActionLogs.Add(log);
+
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("Request {RequestId} completed by user {UserId}",
                     requestId, User.Identity?.Name);
-
-                // Log to audit trail
 
                 TempData["Success"] = $"Request #{requestId} marked as completed and pending payment created.";
             }
@@ -231,8 +292,6 @@ namespace AdministratorWeb.Controllers
             {
                 _logger.LogError(ex, "Error completing request {RequestId}", requestId);
                 TempData["Error"] = "An error occurred while processing the request.";
-
-                // Log failed action
             }
 
             return RedirectToAction(nameof(Index));
@@ -383,6 +442,7 @@ namespace AdministratorWeb.Controllers
 
                 // Get current admin user
                 var adminUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var adminUser = adminUserId != null ? await _context.Users.FindAsync(adminUserId) : null;
 
                 if (dto.RequestType == ManualRequestType.WalkIn)
                 {
@@ -425,6 +485,29 @@ namespace AdministratorWeb.Controllers
                     };
 
                     _context.LaundryRequests.Add(walkInRequest);
+                    await _context.SaveChangesAsync();
+
+                    // Create audit log for walk-in request creation
+                    var walkInLog = new RequestActionLog
+                    {
+                        RequestId = walkInRequest.Id,
+                        CustomerId = customer.Id,
+                        CustomerName = customer.FullName,
+                        Action = "ManualCreate",
+                        PerformedByUserId = adminUserId,
+                        PerformedByUserName = adminUser?.FullName,
+                        PerformedByUserEmail = adminUser?.Email,
+                        OldStatus = null,
+                        NewStatus = RequestStatus.Washing.ToString(),
+                        RequestType = "WalkIn",
+                        WeightKg = dto.WeightKg.Value,
+                        TotalCost = totalCost,
+                        AssignedRobotName = "WALK_IN",
+                        IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                        ActionedAt = DateTime.UtcNow,
+                        Notes = $"Walk-in service - {dto.Notes ?? "No additional notes"}"
+                    };
+                    _context.RequestActionLogs.Add(walkInLog);
                     await _context.SaveChangesAsync();
 
                     _logger.LogInformation(
@@ -490,6 +573,26 @@ namespace AdministratorWeb.Controllers
                     // Update robot status
                     assignedRobot.Status = RobotStatus.Busy;
                     assignedRobot.CurrentTask = $"Manual request #{robotRequest.Id} (Admin-created)";
+
+                    // Create audit log for robot delivery request creation
+                    var robotLog = new RequestActionLog
+                    {
+                        RequestId = robotRequest.Id,
+                        CustomerId = customer.Id,
+                        CustomerName = customer.FullName,
+                        Action = "ManualCreate",
+                        PerformedByUserId = adminUserId,
+                        PerformedByUserName = adminUser?.FullName,
+                        PerformedByUserEmail = adminUser?.Email,
+                        OldStatus = null,
+                        NewStatus = RequestStatus.Accepted.ToString(),
+                        RequestType = "RobotDelivery",
+                        AssignedRobotName = assignedRobot.Name,
+                        IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                        ActionedAt = DateTime.UtcNow,
+                        Notes = $"Robot delivery - {dto.Notes ?? "No additional notes"}. Robot {assignedRobot.Name} dispatched to {customer.RoomName}"
+                    };
+                    _context.RequestActionLogs.Add(robotLog);
 
                     await _context.SaveChangesAsync();
 
@@ -751,6 +854,9 @@ namespace AdministratorWeb.Controllers
         [HttpPost]
         public async Task<IActionResult> ForceCancelAll()
         {
+            var adminUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var adminUser = adminUserId != null ? await _context.Users.FindAsync(adminUserId) : null;
+
             try
             {
                 // Get all requests that are NOT already completed or cancelled
@@ -766,16 +872,36 @@ namespace AdministratorWeb.Controllers
                     return RedirectToAction(nameof(Index));
                 }
 
-                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 var count = requestsToCancel.Count;
 
-                // Cancel all requests
+                // Cancel all requests and create audit logs
                 foreach (var request in requestsToCancel)
                 {
+                    var oldStatus = request.Status.ToString();
+
                     request.Status = RequestStatus.Cancelled;
                     request.DeclineReason = "Force cancelled by administrator";
-                    request.HandledById = userId;
+                    request.HandledById = adminUserId;
                     request.ProcessedAt = DateTime.UtcNow;
+
+                    // Create audit log for each cancellation
+                    var log = new RequestActionLog
+                    {
+                        RequestId = request.Id,
+                        CustomerId = request.CustomerId,
+                        CustomerName = request.CustomerName,
+                        Action = "ForceCancelAll",
+                        PerformedByUserId = adminUserId,
+                        PerformedByUserName = adminUser?.FullName,
+                        PerformedByUserEmail = adminUser?.Email,
+                        OldStatus = oldStatus,
+                        NewStatus = RequestStatus.Cancelled.ToString(),
+                        Reason = "Force cancelled by administrator",
+                        IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                        ActionedAt = DateTime.UtcNow,
+                        Notes = $"Part of bulk force cancel operation ({count} requests)"
+                    };
+                    _context.RequestActionLogs.Add(log);
 
                     // Send notification to customer
                     try
@@ -802,7 +928,7 @@ namespace AdministratorWeb.Controllers
                 await _context.SaveChangesAsync();
 
                 TempData["Success"] = $"Successfully force cancelled {count} request(s).";
-                _logger.LogWarning($"Administrator {userId} force cancelled {count} requests");
+                _logger.LogWarning($"Administrator {adminUserId} force cancelled {count} requests");
             }
             catch (Exception ex)
             {
@@ -811,6 +937,54 @@ namespace AdministratorWeb.Controllers
             }
 
             return RedirectToAction(nameof(Index));
+        }
+
+        /// <summary>
+        /// View request action logs with pagination, search, and filters
+        /// </summary>
+        public async Task<IActionResult> RequestLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
+        {
+            var query = _context.RequestActionLogs.AsQueryable();
+
+            // Search by customer name, request ID, or admin name
+            if (!string.IsNullOrEmpty(searchQuery))
+            {
+                var search = searchQuery.Trim().ToLower();
+                bool isNumeric = int.TryParse(search, out int requestId);
+
+                query = query.Where(l =>
+                    l.CustomerName.ToLower().Contains(search) ||
+                    l.PerformedByUserName.ToLower().Contains(search) ||
+                    (isNumeric && l.RequestId == requestId));
+            }
+
+            // Filter by action type (Accept, Decline, Complete, ManualCreate, ForceCancelAll)
+            if (!string.IsNullOrEmpty(action))
+            {
+                query = query.Where(l => l.Action == action);
+            }
+
+            // Order by most recent first
+            query = query.OrderByDescending(l => l.ActionedAt);
+
+            // Get total count for pagination
+            var totalCount = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            // Get current page
+            var logs = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            ViewBag.SearchQuery = searchQuery;
+            ViewBag.CurrentAction = action;
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = totalPages;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalCount = totalCount;
+
+            return View(logs);
         }
     }
 }

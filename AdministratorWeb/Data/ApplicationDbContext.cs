@@ -21,6 +21,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RobotState> RobotStates { get; set; }
     public DbSet<Message> Messages { get; set; }
     public DbSet<ProfileUpdateLog> ProfileUpdateLogs { get; set; }
+    public DbSet<RequestActionLog> RequestActionLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -214,6 +215,44 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             // Composite index for user update history
             entity.HasIndex(e => new { e.UserId, e.UpdatedAt });
+        });
+
+        builder.Entity<RequestActionLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RequestId).IsRequired();
+            entity.Property(e => e.CustomerId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.CustomerName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.PerformedByUserId).HasMaxLength(450);
+            entity.Property(e => e.PerformedByUserName).HasMaxLength(100);
+            entity.Property(e => e.PerformedByUserEmail).HasMaxLength(256);
+            entity.Property(e => e.OldStatus).HasMaxLength(50);
+            entity.Property(e => e.NewStatus).HasMaxLength(50);
+            entity.Property(e => e.AssignedRobotName).HasMaxLength(100);
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.RequestType).HasMaxLength(50);
+            entity.Property(e => e.WeightKg).HasPrecision(10, 2);
+            entity.Property(e => e.TotalCost).HasPrecision(10, 2);
+            entity.Property(e => e.IpAddress).HasMaxLength(50);
+
+            // Create index on RequestId for faster request lookup
+            entity.HasIndex(e => e.RequestId);
+
+            // Create index on CustomerId for faster customer lookup
+            entity.HasIndex(e => e.CustomerId);
+
+            // Create index on ActionedAt for ordering
+            entity.HasIndex(e => e.ActionedAt);
+
+            // Create index on Action for filtering by action type
+            entity.HasIndex(e => e.Action);
+
+            // Composite index for request action history
+            entity.HasIndex(e => new { e.RequestId, e.ActionedAt });
+
+            // Composite index for customer action history
+            entity.HasIndex(e => new { e.CustomerId, e.ActionedAt });
         });
     }
 }
