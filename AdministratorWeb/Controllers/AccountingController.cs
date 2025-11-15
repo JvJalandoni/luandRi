@@ -1315,8 +1315,8 @@ namespace AdministratorWeb.Controllers
             if (!string.IsNullOrWhiteSpace(searchQuery))
             {
                 query = query.Where(l =>
-                    l.CustomerName.Contains(searchQuery) ||
-                    l.CustomerId.Contains(searchQuery) ||
+                    (l.CustomerName != null && l.CustomerName.Contains(searchQuery)) ||
+                    (l.CustomerId != null && l.CustomerId.Contains(searchQuery)) ||
                     (l.PerformedByUserName != null && l.PerformedByUserName.Contains(searchQuery)) ||
                     (l.PerformedByUserEmail != null && l.PerformedByUserEmail.Contains(searchQuery)));
             }
