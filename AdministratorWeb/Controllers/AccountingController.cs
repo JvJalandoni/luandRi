@@ -1319,15 +1319,16 @@ namespace AdministratorWeb.Controllers
         /// </summary>
         public async Task<IActionResult> AccountingLogs(string searchQuery = "", string action = "", int page = 1, int pageSize = 20)
         {
-            // Get all logs first, then filter in memory to avoid EF Core translation issues
+            // Get all logs first
             var allLogs = await _context.AccountingActionLogs
                 .OrderByDescending(l => l.ActionedAt)
                 .ToListAsync();
 
-            var filteredLogs = allLogs.AsEnumerable();
+            // Start with all logs - NO FILTERING BY DEFAULT
+            IEnumerable<AccountingActionLog> filteredLogs = allLogs;
 
-            // Search by customer name, payment ID, request ID, or admin name
-            if (!string.IsNullOrEmpty(searchQuery))
+            // ONLY apply search if user actually entered something
+            if (!string.IsNullOrWhiteSpace(searchQuery))
             {
                 var search = searchQuery.Trim().ToLower();
                 bool isNumeric = int.TryParse(search, out int numericId);
@@ -1338,8 +1339,8 @@ namespace AdministratorWeb.Controllers
                     (isNumeric && (l.PaymentId == numericId || l.LaundryRequestId == numericId || l.AdjustmentId == numericId)));
             }
 
-            // Filter by action type
-            if (!string.IsNullOrEmpty(action))
+            // ONLY apply action filter if user selected one
+            if (!string.IsNullOrWhiteSpace(action))
             {
                 filteredLogs = filteredLogs.Where(l => l.Action == action);
             }
