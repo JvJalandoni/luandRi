@@ -1,0 +1,435 @@
+@model IEnumerable<AdministratorWeb.Models.RequestActionLog>
+@{
+    ViewData["Title"] = "Request Action Logs";
+    var searchQuery = ViewBag.SearchQuery as string ?? "";
+    var currentAction = ViewBag.CurrentAction as string ?? "";
+    var currentPage = (int)ViewBag.CurrentPage;
+    var totalPages = (int)ViewBag.TotalPages;
+    var pageSize = (int)ViewBag.PageSize;
+    var totalCount = (int)ViewBag.TotalCount;
+}
+
+@functions {
+    private (string bgClass, string textClass, string borderClass, string icon) GetActionStyle(string action)
+    {
+        return action switch
+        {
+            "AcceptRequest" => ("bg-emerald-900/50", "text-emerald-300", "border-emerald-700/50", "check-circle"),
+            "DeclineRequest" => ("bg-red-900/50", "text-red-300", "border-red-700/50", "x-circle"),
+            "CompleteRequest" => ("bg-blue-900/50", "text-blue-300", "border-blue-700/50", "check-square"),
+            "MarkForPickupDelivery" => ("bg-amber-900/50", "text-amber-300", "border-amber-700/50", "package"),
+            "StartDelivery" => ("bg-purple-900/50", "text-purple-300", "border-purple-700/50", "truck"),
+            "CreateManualRequest" => ("bg-indigo-900/50", "text-indigo-300", "border-indigo-700/50", "plus-circle"),
+            "ForceCancelAll" => ("bg-rose-900/50", "text-rose-300", "border-rose-700/50", "alert-triangle"),
+            _ => ("bg-slate-700/50", "text-slate-300", "border-slate-600/50", "activity")
+        };
+    }
+
+    private string FormatActionName(string action)
+    {
+        return action switch
+        {
+            "AcceptRequest" => "Accept Request",
+            "DeclineRequest" => "Decline Request",
+            "CompleteRequest" => "Complete Request",
+            "MarkForPickupDelivery" => "Mark for Pickup/Delivery",
+            "StartDelivery" => "Start Delivery",
+            "CreateManualRequest" => "Create Manual Request",
+            "ForceCancelAll" => "Force Cancel All",
+            _ => action
+        };
+    }
+}
+
+<!-- Dashboard Header -->
+<div class="mb-8 animate-slide-up">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Request Action Logs</h1>
+            <p class="text-slate-400 flex items-center">
+                <i data-lucide="file-text" class="w-4 h-4 mr-2"></i>
+                Track all request actions performed by administrators
+            </p>
+        </div>
+        <a asp-action="Index" class="inline-flex items-center px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl border border-slate-600/50">
+            <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>
+            Back to Requests
+        </a>
+    </div>
+</div>
+
+<!-- Filters Card -->
+<div class="bg-slate-800/50 backdrop-blur-xl shadow-xl rounded-2xl border border-slate-700/50 mb-6 animate-slide-up" style="animation-delay: 0.1s;">
+    <div class="px-6 py-5">
+        <form method="get" asp-action="RequestLogs" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm font-semibold text-slate-300 mb-2 flex items-center">
+                    <i data-lucide="search" class="w-4 h-4 mr-2"></i>
+                    Search
+                </label>
+                <input type="text" name="searchQuery" value="@searchQuery" placeholder="Customer name, ID, admin name, or robot..." class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all placeholder-slate-400" />
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-slate-300 mb-2 flex items-center">
+                    <i data-lucide="tag" class="w-4 h-4 mr-2"></i>
+                    Action Type
+                </label>
+                <select name="actionType" class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all">
+                    @if (string.IsNullOrEmpty(currentAction))
+                    {
+                        <option value="" selected>All Actions</option>
+                    }
+                    else
+                    {
+                        <option value="">All Actions</option>
+                    }
+                    @if (currentAction == "AcceptRequest")
+                    {
+                        <option value="AcceptRequest" selected>Accept Request</option>
+                    }
+                    else
+                    {
+                        <option value="AcceptRequest">Accept Request</option>
+                    }
+                    @if (currentAction == "DeclineRequest")
+                    {
+                        <option value="DeclineRequest" selected>Decline Request</option>
+                    }
+                    else
+                    {
+                        <option value="DeclineRequest">Decline Request</option>
+                    }
+                    @if (currentAction == "CompleteRequest")
+                    {
+                        <option value="CompleteRequest" selected>Complete Request</option>
+                    }
+                    else
+                    {
+                        <option value="CompleteRequest">Complete Request</option>
+                    }
+                    @if (currentAction == "MarkForPickupDelivery")
+                    {
+                        <option value="MarkForPickupDelivery" selected>Mark for Pickup/Delivery</option>
+                    }
+                    else
+                    {
+                        <option value="MarkForPickupDelivery">Mark for Pickup/Delivery</option>
+                    }
+                    @if (currentAction == "StartDelivery")
+                    {
+                        <option value="StartDelivery" selected>Start Delivery</option>
+                    }
+                    else
+                    {
+                        <option value="StartDelivery">Start Delivery</option>
+                    }
+                    @if (currentAction == "CreateManualRequest")
+                    {
+                        <option value="CreateManualRequest" selected>Create Manual Request</option>
+                    }
+                    else
+                    {
+                        <option value="CreateManualRequest">Create Manual Request</option>
+                    }
+                    @if (currentAction == "ForceCancelAll")
+                    {
+                        <option value="ForceCancelAll" selected>Force Cancel All</option>
+                    }
+                    else
+                    {
+                        <option value="ForceCancelAll">Force Cancel All</option>
+                    }
+                </select>
+            </div>
+            <div class="flex items-end space-x-2">
+                <button type="submit" class="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl">
+                    <i data-lucide="filter" class="w-4 h-4 mr-2"></i>
+                    Apply
+                </button>
+                <a href="@Url.Action("RequestLogs")" class="inline-flex items-center justify-center px-4 py-2.5 bg-slate-700/50 hover:bg-slate-600/50 text-white text-sm font-medium rounded-lg transition-all duration-200 border border-slate-600/50">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Results Summary -->
+<div class="mb-6 px-4 py-3 bg-blue-900/30 border border-blue-700/50 rounded-xl text-blue-300 flex items-center animate-slide-up" style="animation-delay: 0.2s;">
+    <i data-lucide="info" class="w-5 h-5 mr-3"></i>
+    Showing <span class="font-bold mx-1">@Model.Count()</span> of <span class="font-bold mx-1">@totalCount</span> total log entries
+    @if (totalPages > 1)
+    {
+        <span class="ml-2">(Page @currentPage of @totalPages)</span>
+    }
+</div>
+
+<!-- Request Logs Timeline -->
+<div class="space-y-4 animate-slide-up" style="animation-delay: 0.3s;">
+    @if (Model.Any())
+    {
+        @foreach (var log in Model)
+        {
+            var actionStyle = GetActionStyle(log.Action);
+
+            <div class="bg-slate-800/50 backdrop-blur-xl shadow-xl rounded-2xl border border-slate-700/50 overflow-hidden hover:border-slate-600/50 transition-all duration-200 group">
+                <div class="px-6 py-5">
+                    <!-- Header Row -->
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-start space-x-4 flex-1">
+                            <!-- Action Icon -->
+                            <div class="flex-shrink-0">
+                                <div class="h-12 w-12 rounded-xl @actionStyle.bgClass @actionStyle.borderClass border flex items-center justify-center">
+                                    <i data-lucide="@actionStyle.icon" class="w-6 h-6 @actionStyle.textClass"></i>
+                                </div>
+                            </div>
+
+                            <!-- Action Info -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center space-x-2 mb-1">
+                                    <h3 class="text-lg font-bold text-white">@FormatActionName(log.Action)</h3>
+                                    <span class="px-2.5 py-0.5 text-xs font-semibold rounded-lg @actionStyle.bgClass @actionStyle.textClass @actionStyle.borderClass border">
+                                        @log.Action
+                                    </span>
+                                </div>
+                                <p class="text-sm text-slate-400 flex items-center">
+                                    <i data-lucide="user" class="w-3 h-3 mr-1"></i>
+                                    @log.CustomerName
+                                    <span class="text-slate-500 ml-2 font-mono text-xs">(ID: @log.CustomerId)</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Timestamp -->
+                        <div class="text-right flex-shrink-0 ml-4">
+                            <p class="text-sm text-slate-400 flex items-center justify-end mb-1">
+                                <i data-lucide="calendar" class="w-3 h-3 mr-1"></i>
+                                @log.ActionedAt.ToLocalTime().ToString("MMM dd, yyyy")
+                            </p>
+                            <p class="text-sm font-semibold text-white flex items-center justify-end">
+                                <i data-lucide="clock" class="w-3 h-3 mr-1"></i>
+                                @log.ActionedAt.ToLocalTime().ToString("hh:mm tt")
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Details Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <!-- Request Type -->
+                        <div class="px-4 py-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
+                            <p class="text-xs text-slate-400 mb-1 flex items-center">
+                                <i data-lucide="tag" class="w-3 h-3 mr-1"></i>
+                                Request Type
+                            </p>
+                            @if (!string.IsNullOrEmpty(log.RequestType))
+                            {
+                                <p class="text-sm font-semibold text-white">@log.RequestType</p>
+                            }
+                            else
+                            {
+                                <p class="text-sm text-slate-500">N/A</p>
+                            }
+                        </div>
+
+                        <!-- Robot Assignment -->
+                        <div class="px-4 py-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
+                            <p class="text-xs text-slate-400 mb-1 flex items-center">
+                                <i data-lucide="bot" class="w-3 h-3 mr-1"></i>
+                                Assigned Robot
+                            </p>
+                            @if (!string.IsNullOrEmpty(log.AssignedRobotName))
+                            {
+                                <p class="text-sm font-semibold text-purple-400">@log.AssignedRobotName</p>
+                            }
+                            else
+                            {
+                                <p class="text-sm text-slate-500">None</p>
+                            }
+                        </div>
+
+                        <!-- Weight & Cost -->
+                        <div class="px-4 py-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
+                            <p class="text-xs text-slate-400 mb-1 flex items-center">
+                                <i data-lucide="scale" class="w-3 h-3 mr-1"></i>
+                                Weight / Cost
+                            </p>
+                            <div class="flex items-center space-x-2">
+                                @if (log.WeightKg.HasValue)
+                                {
+                                    <span class="text-sm font-semibold text-amber-400">@log.WeightKg.Value.ToString("N2") kg</span>
+                                }
+                                else
+                                {
+                                    <span class="text-sm text-slate-500">N/A</span>
+                                }
+                                @if (log.TotalCost.HasValue)
+                                {
+                                    <span class="text-slate-500">|</span>
+                                    <span class="text-sm font-semibold text-emerald-400">₱@log.TotalCost.Value.ToString("N2")</span>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Status Change -->
+                        <div class="px-4 py-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
+                            <p class="text-xs text-slate-400 mb-1 flex items-center">
+                                <i data-lucide="arrow-right-left" class="w-3 h-3 mr-1"></i>
+                                Status Change
+                            </p>
+                            @if (!string.IsNullOrEmpty(log.OldStatus) || !string.IsNullOrEmpty(log.NewStatus))
+                            {
+                                <div class="flex items-center space-x-1 flex-wrap">
+                                    @if (!string.IsNullOrEmpty(log.OldStatus))
+                                    {
+                                        <span class="px-2 py-0.5 text-xs font-semibold rounded bg-slate-600/50 text-slate-300">@log.OldStatus</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(log.OldStatus) && !string.IsNullOrEmpty(log.NewStatus))
+                                    {
+                                        <i data-lucide="arrow-right" class="w-3 h-3 text-slate-400"></i>
+                                    }
+                                    @if (!string.IsNullOrEmpty(log.NewStatus))
+                                    {
+                                        <span class="px-2 py-0.5 text-xs font-semibold rounded bg-brand-600/50 text-brand-300">@log.NewStatus</span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-sm text-slate-500">N/A</p>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Reason (if any) -->
+                    @if (!string.IsNullOrEmpty(log.Reason))
+                    {
+                        <div class="px-4 py-3 bg-red-900/20 rounded-lg border border-red-800/30 mb-4">
+                            <p class="text-xs text-red-400 mb-1 flex items-center">
+                                <i data-lucide="alert-circle" class="w-3 h-3 mr-1"></i>
+                                Reason
+                            </p>
+                            <p class="text-sm text-red-300">@log.Reason</p>
+                        </div>
+                    }
+
+                    <!-- Notes -->
+                    @if (!string.IsNullOrEmpty(log.Notes))
+                    {
+                        <div class="px-4 py-3 bg-indigo-900/20 rounded-lg border border-indigo-800/30 mb-4">
+                            <p class="text-xs text-indigo-400 mb-1 flex items-center">
+                                <i data-lucide="message-square" class="w-3 h-3 mr-1"></i>
+                                Notes
+                            </p>
+                            <p class="text-sm text-indigo-300">@log.Notes</p>
+                        </div>
+                    }
+
+                    <!-- Footer -->
+                    <div class="pt-4 border-t border-slate-700/50 flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <span class="text-xs text-slate-500 flex items-center">
+                                <i data-lucide="hash" class="w-3 h-3 mr-1"></i>
+                                Request #@log.RequestId
+                            </span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            @if (!string.IsNullOrEmpty(log.PerformedByUserName))
+                            {
+                                <span class="text-xs text-slate-400 flex items-center">
+                                    <i data-lucide="user-check" class="w-3 h-3 mr-1"></i>
+                                    @log.PerformedByUserName
+                                </span>
+                                <span class="text-xs text-slate-500">(@log.PerformedByUserEmail)</span>
+                            }
+                            else
+                            {
+                                <span class="text-xs text-slate-500 flex items-center">
+                                    <i data-lucide="cpu" class="w-3 h-3 mr-1"></i>
+                                    System
+                                </span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="bg-slate-800/50 backdrop-blur-xl shadow-xl rounded-2xl border border-slate-700/50 overflow-hidden">
+            <div class="px-6 py-16 text-center">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-slate-700/50 rounded-full mb-4">
+                    <i data-lucide="inbox" class="w-8 h-8 text-slate-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">No request logs found</h3>
+                <p class="text-slate-400">There are no request actions logged yet, or your search didn't match any records.</p>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Pagination -->
+@if (totalPages > 1)
+{
+    <nav class="mt-8 flex justify-center animate-slide-up" style="animation-delay: 0.4s;">
+        <div class="inline-flex items-center space-x-1 bg-slate-800/50 backdrop-blur-xl rounded-xl border border-slate-700/50 p-1.5">
+            @if (currentPage > 1)
+            {
+                <a href="@Url.Action("RequestLogs", new { searchQuery, actionType = currentAction, page = currentPage - 1, pageSize })"
+                   class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white hover:bg-slate-700/50 transition-all">
+                    <i data-lucide="chevron-left" class="w-4 h-4 mr-1"></i>
+                    Previous
+                </a>
+            }
+            else
+            {
+                <span class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-slate-500 cursor-not-allowed">
+                    <i data-lucide="chevron-left" class="w-4 h-4 mr-1"></i>
+                    Previous
+                </span>
+            }
+
+            <div class="flex items-center space-x-1 px-2">
+                @for (var i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                {
+                    @if (i == currentPage)
+                    {
+                        <span class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium rounded-lg bg-gradient-to-r from-brand-600 to-indigo-600 text-white shadow-lg">
+                            @i
+                        </span>
+                    }
+                    else
+                    {
+                        <a href="@Url.Action("RequestLogs", new { searchQuery, actionType = currentAction, page = i, pageSize })"
+                           class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium rounded-lg text-slate-300 hover:bg-slate-700/50 transition-all">
+                            @i
+                        </a>
+                    }
+                }
+            </div>
+
+            @if (currentPage < totalPages)
+            {
+                <a href="@Url.Action("RequestLogs", new { searchQuery, actionType = currentAction, page = currentPage + 1, pageSize })"
+                   class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white hover:bg-slate-700/50 transition-all">
+                    Next
+                    <i data-lucide="chevron-right" class="w-4 h-4 ml-1"></i>
+                </a>
+            }
+            else
+            {
+                <span class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-slate-500 cursor-not-allowed">
+                    Next
+                    <i data-lucide="chevron-right" class="w-4 h-4 ml-1"></i>
+                </span>
+            }
+        </div>
+    </nav>
+}
+
+<!-- Version Number -->
+<div class="text-center mt-8 animate-slide-up" style="animation-delay: 0.5s;">
+    <p class="text-xs text-slate-600">
+        Request Logs v<span class="font-semibold">1.0</span>
+    </p>
+</div>
