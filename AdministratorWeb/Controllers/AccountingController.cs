@@ -397,26 +397,19 @@ namespace AdministratorWeb.Controllers
             // Send refund notification to customer
             try
             {
-                var receipt = await _context.Receipts
-                    .FirstOrDefaultAsync(r => r.PaymentId == paymentId);
-
-                if (receipt != null)
+                var refundMessage = new Message
                 {
-                    var receiptUrl = $"{Request.Scheme}://{Request.Host}/Accounting/ViewReceipt/{receipt.Id}";
-                    var refundMessage = new Message
-                    {
-                        SenderId = "System",
-                        SenderName = "System",
-                        SenderType = "Admin",
-                        CustomerId = payment.CustomerId,
-                        CustomerName = payment.CustomerName,
-                        Content = $"REFUND ISSUED\n\nA refund of ₱{refundAmount:N2} has been issued for your payment.\n\nReason: {refundReason}\n\nView updated receipt: {receiptUrl}",
-                        SentAt = DateTime.UtcNow,
-                        IsRead = false
-                    };
-                    _context.Messages.Add(refundMessage);
-                    await _context.SaveChangesAsync();
-                }
+                    SenderId = "System",
+                    SenderName = "System",
+                    SenderType = "Admin",
+                    CustomerId = payment.CustomerId,
+                    CustomerName = payment.CustomerName,
+                    Content = $"REFUND ISSUED\n\nA refund of ₱{refundAmount:N2} has been issued for your payment.\n\nReason: {refundReason}\n\nPlease check your payment history in the app for details.",
+                    SentAt = DateTime.UtcNow,
+                    IsRead = false
+                };
+                _context.Messages.Add(refundMessage);
+                await _context.SaveChangesAsync();
             }
             catch
             {

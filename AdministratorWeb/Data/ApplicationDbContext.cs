@@ -22,6 +22,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Message> Messages { get; set; }
     public DbSet<ProfileUpdateLog> ProfileUpdateLogs { get; set; }
     public DbSet<AccountingActionLog> AccountingActionLogs { get; set; }
+    public DbSet<RequestActionLog> RequestActionLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -238,6 +239,35 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(e => e.CustomerId);
             entity.HasIndex(e => e.ActionedAt);
             entity.HasIndex(e => e.Action);
+        });
+
+        builder.Entity<RequestActionLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.CustomerId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.CustomerName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.RequestType).HasMaxLength(50);
+            entity.Property(e => e.OldStatus).HasMaxLength(50);
+            entity.Property(e => e.NewStatus).HasMaxLength(50);
+            entity.Property(e => e.AssignedRobotName).HasMaxLength(100);
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.WeightKg).HasPrecision(10, 2);
+            entity.Property(e => e.TotalCost).HasPrecision(10, 2);
+            entity.Property(e => e.PerformedByUserId).HasMaxLength(450);
+            entity.Property(e => e.PerformedByUserName).HasMaxLength(100);
+            entity.Property(e => e.PerformedByUserEmail).HasMaxLength(256);
+            entity.Property(e => e.IpAddress).HasMaxLength(50);
+            entity.Property(e => e.Notes).HasMaxLength(1000);
+
+            // Indexes for efficient queries
+            entity.HasIndex(e => e.RequestId);
+            entity.HasIndex(e => e.CustomerId);
+            entity.HasIndex(e => e.ActionedAt);
+            entity.HasIndex(e => e.Action);
+            // Composite indexes for common query patterns
+            entity.HasIndex(e => new { e.CustomerId, e.ActionedAt });
+            entity.HasIndex(e => new { e.RequestId, e.ActionedAt });
         });
     }
 }
