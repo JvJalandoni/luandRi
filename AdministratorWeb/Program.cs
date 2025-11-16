@@ -22,6 +22,9 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
+// Configure Email settings
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
+
 // Identity configuration with very lax password requirements
 builder.Services.AddDefaultIdentity<ApplicationUser>(options => 
 {
@@ -95,9 +98,14 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<DbSeeder>();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
+builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 builder.Services.AddSingleton<IRobotManagementService, RobotManagementService>();
 // Re-enabled: Request timeout service with proper notifications
 builder.Services.AddHostedService<RequestTimeoutService>();
+// Automatic payment reminder service - sends reminders every 24 hours for outstanding payments
+builder.Services.AddHostedService<PaymentReminderService>();
 // builder.Services.AddHostedService<OrphanedRequestCleanupService>();
 
 // Add HTTP context accessor for audit logging

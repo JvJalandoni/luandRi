@@ -16,16 +16,19 @@ namespace AdministratorWeb.Controllers.Api
     {
         private readonly JwtTokenService _jwtTokenService;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IEmailNotificationService _emailService;
 
         /// <summary>
         /// Initializes the authentication controller with required services
         /// </summary>
         /// <param name="jwtTokenService">Service for generating and validating JWT tokens</param>
         /// <param name="userManager">ASP.NET Identity user manager for user operations</param>
-        public AuthController(JwtTokenService jwtTokenService, UserManager<ApplicationUser> userManager)
+        /// <param name="emailService">Email notification service for welcome emails</param>
+        public AuthController(JwtTokenService jwtTokenService, UserManager<ApplicationUser> userManager, IEmailNotificationService emailService)
         {
             _jwtTokenService = jwtTokenService;
             _userManager = userManager;
+            _emailService = emailService;
         }
 
         /// <summary>
@@ -67,6 +70,21 @@ namespace AdministratorWeb.Controllers.Api
             if (result.Succeeded)
             {
                 await _userManager.AddToRoleAsync(user, "Member");
+
+                // Send welcome email
+                try
+                {
+                    await _emailService.SendWelcomeEmailAsync(
+                        user.Id,
+                        user.FullName,
+                        user.Email!
+                    );
+                }
+                catch
+                {
+                    // Don't fail registration if email fails
+                }
+
                 return Ok(new { success = true, message = "Account created successfully" });
             }
 

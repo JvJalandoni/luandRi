@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Message from LuandRi Admin</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f7fa;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td align="center" style="padding: 40px 0;">
+                <table role="presentation" style="width: 600px; border-collapse: collapse; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">
+                                💬 New Message from Admin
+                            </h1>
+                            <p style="margin: 10px 0 0 0; color: #e0e7ff; font-size: 16px;">
+                                {{adminName}} has sent you a message
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+                            <p style="margin: 0 0 20px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">
+                                Hi <strong>{{userName}}</strong>,
+                            </p>
+
+                            <p style="margin: 0 0 30px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">
+                                You have received a new message from <strong>{{adminName}}</strong> at LuandRi Laundry Service:
+                            </p>
+
+                            <!-- Message Content Box -->
+                            <div style="background-color: #f7fafc; border-left: 4px solid #667eea; padding: 20px; margin: 0 0 30px 0; border-radius: 4px;">
+                                <p style="margin: 0; color: #2d3748; font-size: 15px; line-height: 1.8; white-space: pre-wrap;">{{messageContent}}</p>
+                            </div>
+
+                            <p style="margin: 0 0 30px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">
+                                Please open your LuandRi mobile app to view and reply to this message.
+                            </p>
+
+                            <!-- CTA Button -->
+                            <table role="presentation" style="margin: 0 auto;">
+                                <tr>
+                                    <td style="border-radius: 6px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                        <a href="#" style="display: inline-block; padding: 14px 40px; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600;">
+                                            Open Mobile App
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Message Info -->
+                    <tr>
+                        <td style="padding: 0 30px 40px 30px;">
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #edf2f7; border-radius: 6px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <p style="margin: 0 0 10px 0; color: #2d3748; font-size: 14px;">
+                                            <strong>From:</strong> {{adminName}}
+                                        </p>
+                                        <p style="margin: 0; color: #2d3748; font-size: 14px;">
+                                            <strong>Sent:</strong> {{sentTime}}
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f7fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+                            <p style="margin: 0 0 10px 0; color: #718096; font-size: 14px;">
+                                This is an automated notification from LuandRi Laundry Service
+                            </p>
+                            <p style="margin: 0; color: #a0aec0; font-size: 12px;">
+                                {{currentYear}} LuandRi. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

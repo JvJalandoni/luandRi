@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
 using AdministratorWeb.Models;
 using AdministratorWeb.Data;
+using AdministratorWeb.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace AdministratorWeb.Controllers.Api
@@ -20,13 +21,15 @@ namespace AdministratorWeb.Controllers.Api
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IWebHostEnvironment _environment;
         private readonly ApplicationDbContext _context;
+        private readonly IEmailNotificationService _emailService;
 
-        public UserController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IWebHostEnvironment environment, ApplicationDbContext context)
+        public UserController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IWebHostEnvironment environment, ApplicationDbContext context, IEmailNotificationService emailService)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _environment = environment;
             _context = context;
+            _emailService = emailService;
         }
 
         /// <summary>
@@ -374,6 +377,214 @@ namespace AdministratorWeb.Controllers.Api
         }
 
         /// <summary>
+        /// Request email change with OTP verification - Step 1
+        /// Sends OTP code to new email address
+        /// </summary>
+        [HttpPost("request-email-change")]
+        public async Task<IActionResult> RequestEmailChange([FromBody] RequestEmailChangeRequest request)
+        {
+            Console.WriteLine("========================================");
+            Console.WriteLine("[API REQUEST EMAIL CHANGE] REQUEST RECEIVED");
+            Console.WriteLine($"[API] NewEmail: {request.NewEmail}");
+            Console.WriteLine("========================================");
+
+            var customerId = User.FindFirst("CustomerId")?.Value;
+            if (string.IsNullOrEmpty(customerId))
+            {
+                return Unauthorized("Customer ID not found in token");
+            }
+
+            var user = await _userManager.FindByIdAsync(customerId);
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            // Validate new email
+            if (string.IsNullOrWhiteSpace(request.NewEmail))
+            {
+                return BadRequest(new { success = false, message = "New email is required" });
+            }
+
+            // Check if new email is different from current
+            if (request.NewEmail.Trim().ToLower() == user.Email?.ToLower())
+            {
+                return BadRequest(new { success = false, message = "New email is the same as current email" });
+            }
+
+            // Verify current password
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+            {
+                return BadRequest(new { success = false, message = "Current password is required" });
+            }
+
+            var passwordValid = await _userManager.CheckPasswordAsync(user, request.CurrentPassword);
+            if (!passwordValid)
+            {
+                Console.WriteLine("[API] ❌ Current password is incorrect");
+                return BadRequest(new { success = false, message = "Current password is incorrect" });
+            }
+
+            // Check if new email already exists
+            var existingUser = await _userManager.FindByEmailAsync(request.NewEmail);
+            if (existingUser != null)
+            {
+                return BadRequest(new { success = false, message = "Email already in use by another account" });
+            }
+
+            // Generate 6-digit OTP
+            var random = new Random();
+            var otpCode = random.Next(100000, 999999).ToString();
+
+            // Delete any existing OTP for this user
+            var existingOtps = _context.OTPCodes
+                .Where(o => o.UserId == customerId && o.Purpose == "EmailChange");
+            _context.OTPCodes.RemoveRange(existingOtps);
+
+            // Store OTP in database
+            var otp = new OTPCode
+            {
+                UserId = customerId,
+                Code = otpCode,
+                Purpose = "EmailChange",
+                NewEmail = request.NewEmail.Trim(),
+                ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+                CreatedAt = DateTime.UtcNow,
+                IsUsed = false
+            };
+
+            _context.OTPCodes.Add(otp);
+            await _context.SaveChangesAsync();
+
+            // Send OTP email to NEW email address
+            try
+            {
+                await _emailService.SendEmailChangeOTPAsync(
+                    customerId,
+                    request.NewEmail.Trim(),
+                    user.FullName,
+                    otpCode
+                );
+                Console.WriteLine($"[API] ✅ OTP email sent to {request.NewEmail}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[API] ❌ Failed to send OTP email: {ex.Message}");
+                return BadRequest(new { success = false, message = "Failed to send OTP email. Please try again." });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = $"Verification code sent to {request.NewEmail}. Please check your email.",
+                expiresAt = otp.ExpiresAt
+            });
+        }
+
+        /// <summary>
+        /// Verify OTP and complete email change - Step 2
+        /// </summary>
+        [HttpPost("verify-email-change")]
+        public async Task<IActionResult> VerifyEmailChange([FromBody] VerifyEmailChangeRequest request)
+        {
+            Console.WriteLine("========================================");
+            Console.WriteLine("[API VERIFY EMAIL CHANGE] REQUEST RECEIVED");
+            Console.WriteLine($"[API] OTP Code: {request.OtpCode}");
+            Console.WriteLine("========================================");
+
+            var customerId = User.FindFirst("CustomerId")?.Value;
+            if (string.IsNullOrEmpty(customerId))
+            {
+                return Unauthorized("Customer ID not found in token");
+            }
+
+            var user = await _userManager.FindByIdAsync(customerId);
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            // Validate OTP
+            if (string.IsNullOrWhiteSpace(request.OtpCode))
+            {
+                return BadRequest(new { success = false, message = "OTP code is required" });
+            }
+
+            // Find OTP in database
+            var otp = await _context.OTPCodes
+                .FirstOrDefaultAsync(o =>
+                    o.UserId == customerId &&
+                    o.Code == request.OtpCode.Trim() &&
+                    o.Purpose == "EmailChange" &&
+                    !o.IsUsed &&
+                    o.ExpiresAt > DateTime.UtcNow);
+
+            if (otp == null)
+            {
+                Console.WriteLine("[API] ❌ Invalid or expired OTP");
+                return BadRequest(new { success = false, message = "Invalid or expired verification code" });
+            }
+
+            var oldEmail = user.Email;
+            var newEmail = otp.NewEmail;
+
+            // Check if new email is still available
+            var existingUser = await _userManager.FindByEmailAsync(newEmail!);
+            if (existingUser != null && existingUser.Id != customerId)
+            {
+                return BadRequest(new { success = false, message = "Email already in use by another account" });
+            }
+
+            // Update email
+            user.Email = newEmail;
+            user.UserName = newEmail;
+            user.EmailConfirmed = true;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                Console.WriteLine($"[API] ❌ Email update failed: {errors}");
+                return BadRequest(new { success = false, message = errors });
+            }
+
+            // Mark OTP as used
+            otp.IsUsed = true;
+            otp.UsedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            Console.WriteLine($"[API] ✅ Email changed from {oldEmail} to {newEmail}");
+
+            // Create audit log
+            var log = new ProfileUpdateLog
+            {
+                UserId = user.Id,
+                UserName = user.FullName,
+                UserEmail = user.Email,
+                UpdatedByUserId = user.Id,
+                UpdatedByUserName = user.FullName,
+                UpdatedByUserEmail = user.Email,
+                UpdateSource = "MobileApp",
+                OldValues = System.Text.Json.JsonSerializer.Serialize(new { Email = oldEmail }),
+                NewValues = System.Text.Json.JsonSerializer.Serialize(new { Email = newEmail }),
+                PasswordChanged = false,
+                ProfilePictureChanged = false,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.ProfileUpdateLogs.Add(log);
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                message = "Email changed successfully",
+                newEmail = newEmail
+            });
+        }
+
+        /// <summary>
         /// Change user password - Mobile app endpoint
         /// Requires current password verification and logs to ProfileUpdateLog
         /// </summary>
@@ -445,6 +656,18 @@ namespace AdministratorWeb.Controllers.Api
             await _context.SaveChangesAsync();
             Console.WriteLine("[API] ✅ Audit log created for password change");
 
+            // Send password changed notification email
+            try
+            {
+                await _emailService.SendPasswordChangedAsync(user.Id, user.FullName);
+                Console.WriteLine("[API] ✅ Password change notification email sent");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[API] ⚠️ Failed to send password change email: {ex.Message}");
+                // Don't fail the password change if email fails
+            }
+
             return Ok(new { success = true, message = "Password changed successfully" });
         }
     }
@@ -463,5 +686,16 @@ namespace AdministratorWeb.Controllers.Api
     {
         public string CurrentPassword { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class RequestEmailChangeRequest
+    {
+        public string NewEmail { get; set; } = string.Empty;
+        public string CurrentPassword { get; set; } = string.Empty;
+    }
+
+    public class VerifyEmailChangeRequest
+    {
+        public string OtpCode { get; set; } = string.Empty;
     }
 }

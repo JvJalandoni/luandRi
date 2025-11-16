@@ -23,6 +23,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ProfileUpdateLog> ProfileUpdateLogs { get; set; }
     public DbSet<AccountingActionLog> AccountingActionLogs { get; set; }
     public DbSet<RequestActionLog> RequestActionLogs { get; set; }
+    public DbSet<EmailQueue> EmailQueues { get; set; }
+    public DbSet<EmailTemplate> EmailTemplates { get; set; }
+    public DbSet<EmailLog> EmailLogs { get; set; }
+    public DbSet<OTPCode> OTPCodes { get; set; }
+    public DbSet<EmailPreferences> EmailPreferences { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -268,6 +273,71 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             // Composite indexes for common query patterns
             entity.HasIndex(e => new { e.CustomerId, e.ActionedAt });
             entity.HasIndex(e => new { e.RequestId, e.ActionedAt });
+        });
+
+        builder.Entity<EmailQueue>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ToEmail).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.ToName).HasMaxLength(100);
+            entity.Property(e => e.Subject).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+
+            // Indexes for efficient queries
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => new { e.Status, e.CreatedAt });
+        });
+
+        builder.Entity<EmailTemplate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Subject).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.Variables).HasMaxLength(1000);
+
+            // Create unique index on template name
+            entity.HasIndex(e => e.Name).IsUnique();
+            entity.HasIndex(e => e.IsActive);
+        });
+
+        builder.Entity<EmailLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(450);
+            entity.Property(e => e.EmailType).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.ToEmail).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.Subject).IsRequired().HasMaxLength(500);
+
+            // Indexes for efficient queries
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.SentAt);
+            entity.HasIndex(e => e.EmailType);
+            entity.HasIndex(e => new { e.UserId, e.SentAt });
+        });
+
+        builder.Entity<OTPCode>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.Email).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.Code).IsRequired().HasMaxLength(6);
+
+            // Indexes for efficient queries
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.Email);
+            entity.HasIndex(e => e.Code);
+            entity.HasIndex(e => e.ExpiresAt);
+            entity.HasIndex(e => new { e.UserId, e.Email, e.Code });
+        });
+
+        builder.Entity<EmailPreferences>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+
+            // Create unique index on UserId (one preference record per user)
+            entity.HasIndex(e => e.UserId).IsUnique();
         });
     }
 }
