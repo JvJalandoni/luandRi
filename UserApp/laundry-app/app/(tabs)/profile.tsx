@@ -10,6 +10,8 @@ import {
         Image,
         ActivityIndicator,
         Modal,
+        FlatList,
+        Linking,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useCustomAlert } from '../../components/CustomAlert';
@@ -18,6 +20,17 @@ import { ThemedView } from '../../components/ThemedView';
 import { useAuth } from '../../contexts/AuthContext';
 import { useThemeColor } from '../../hooks/useThemeColor';
 import { userService } from '../../services/userService';
+import { apiGet } from '../../services/api';
+
+interface AdminContact {
+        id: string;
+        firstName: string;
+        lastName: string;
+        fullName: string;
+        email: string;
+        phoneNumber: string | null;
+        isActive: boolean;
+}
 
 /**
  * Profile Screen - User account management and settings
@@ -54,6 +67,13 @@ export default function ProfileScreen() {
                 newPassword: '',
                 confirmPassword: ''
         });
+
+        // Contact Support state
+        const [showAdminListModal, setShowAdminListModal] = useState(false);
+        const [showAdminDetailModal, setShowAdminDetailModal] = useState(false);
+        const [adminList, setAdminList] = useState<AdminContact[]>([]);
+        const [selectedAdmin, setSelectedAdmin] = useState<AdminContact | null>(null);
+        const [isLoadingAdmins, setIsLoadingAdmins] = useState(false);
 
         const backgroundColor = useThemeColor({}, 'background');
         const textColor = useThemeColor({}, 'text');
@@ -317,6 +337,48 @@ export default function ProfileScreen() {
                 );
         };
 
+        /**
+         * Fetches list of admin contacts from server
+         * Caches the list for offline access
+         */
+        const fetchAdminContacts = async () => {
+                setIsLoadingAdmins(true);
+                try {
+                        const response = await apiGet('/user/admins');
+                        const admins = response.data as AdminContact[];
+                        setAdminList(admins);
+                        setShowAdminListModal(true);
+                } catch (error: any) {
+                        console.error('Failed to fetch admin contacts:', error);
+                        showAlert('Error', 'Failed to load support contacts. Please check your internet connection.');
+                } finally {
+                        setIsLoadingAdmins(false);
+                }
+        };
+
+        /**
+         * Handles selecting an admin from the list
+         */
+        const handleSelectAdmin = (admin: AdminContact) => {
+                setSelectedAdmin(admin);
+                setShowAdminListModal(false);
+                setShowAdminDetailModal(true);
+        };
+
+        /**
+         * Opens phone dialer with admin's phone number
+         */
+        const handleCallAdmin = (phoneNumber: string) => {
+                Linking.openURL(`tel:${phoneNumber}`);
+        };
+
+        /**
+         * Opens email client with admin's email
+         */
+        const handleEmailAdmin = (email: string) => {
+                Linking.openURL(`mailto:${email}`);
+        };
+
 
         return (
                 <ThemedView style={styles.container}>
@@ -478,6 +540,25 @@ export default function ProfileScreen() {
                                         </TouchableOpacity>
                                 </View>
 
+                                {/* Contact Support Section */}
+                                <View style={[styles.section, { backgroundColor: cardColor }]}>
+                                        <ThemedText style={styles.sectionTitle}>Support</ThemedText>
+                                        <TouchableOpacity
+                                                style={[styles.contactSupportButton, { backgroundColor: primaryColor }]}
+                                                onPress={fetchAdminContacts}
+                                                disabled={isLoadingAdmins}
+                                        >
+                                                {isLoadingAdmins ? (
+                                                        <ActivityIndicator color="#fff" />
+                                                ) : (
+                                                        <Text style={styles.contactSupportButtonText}>Contact Support</Text>
+                                                )}
+                                        </TouchableOpacity>
+                                        <ThemedText style={[styles.supportDescription, { color: mutedColor }]}>
+                                                Get admin contact information for assistance
+                                        </ThemedText>
+                                </View>
+
                                 <View style={[styles.section, { backgroundColor: cardColor }]}>
                                         <TouchableOpacity style={[styles.logoutButton, { backgroundColor: dangerColor }]} onPress={handleLogout}>
                                                 <Text style={styles.logoutButtonText}>Logout</Text>
@@ -611,6 +692,150 @@ export default function ProfileScreen() {
                                                                 ) : (
                                                                         <Text style={styles.modalButtonText}>Change Password</Text>
                                                                 )}
+                                                        </TouchableOpacity>
+                                                </View>
+                                        </View>
+                                </View>
+                        </Modal>
+
+                        {/* Admin List Modal */}
+                        <Modal
+                                visible={showAdminListModal}
+                                transparent={true}
+                                animationType="fade"
+                                onRequestClose={() => setShowAdminListModal(false)}
+                        >
+                                <View style={styles.modalOverlay}>
+                                        <View style={[styles.modalContent, { backgroundColor: cardColor, maxHeight: '70%' }]}>
+                                                <Text style={[styles.modalTitle, { color: textColor }]}>
+                                                        Support Contacts
+                                                </Text>
+                                                <Text style={[styles.modalDescription, { color: mutedColor }]}>
+                                                        Select an administrator to view their contact information.
+                                                </Text>
+
+                                                {adminList.length === 0 ? (
+                                                        <Text style={[styles.emptyListText, { color: mutedColor }]}>
+                                                                No administrators available
+                                                        </Text>
+                                                ) : (
+                                                        <FlatList
+                                                                data={adminList}
+                                                                keyExtractor={(item) => item.id}
+                                                                style={styles.adminList}
+                                                                renderItem={({ item }) => (
+                                                                        <TouchableOpacity
+                                                                                style={[styles.adminListItem, { borderColor: borderColor }]}
+                                                                                onPress={() => handleSelectAdmin(item)}
+                                                                        >
+                                                                                <View style={styles.adminListItemContent}>
+                                                                                        <View style={[styles.adminAvatar, { backgroundColor: primaryColor }]}>
+                                                                                                <Text style={styles.adminAvatarText}>
+                                                                                                        {item.firstName.charAt(0)}{item.lastName.charAt(0)}
+                                                                                                </Text>
+                                                                                        </View>
+                                                                                        <View style={styles.adminInfo}>
+                                                                                                <Text style={[styles.adminName, { color: textColor }]}>
+                                                                                                        {item.fullName}
+                                                                                                </Text>
+                                                                                                <Text style={[styles.adminEmail, { color: mutedColor }]}>
+                                                                                                        {item.email}
+                                                                                                </Text>
+                                                                                        </View>
+                                                                                        {!item.isActive && (
+                                                                                                <View style={[styles.inactiveBadge, { backgroundColor: mutedColor }]}>
+                                                                                                        <Text style={styles.inactiveBadgeText}>Inactive</Text>
+                                                                                                </View>
+                                                                                        )}
+                                                                                </View>
+                                                                                <Text style={[styles.adminListArrow, { color: mutedColor }]}>›</Text>
+                                                                        </TouchableOpacity>
+                                                                )}
+                                                        />
+                                                )}
+
+                                                <TouchableOpacity
+                                                        style={[styles.closeButton, { backgroundColor: mutedColor }]}
+                                                        onPress={() => setShowAdminListModal(false)}
+                                                >
+                                                        <Text style={styles.closeButtonText}>Close</Text>
+                                                </TouchableOpacity>
+                                        </View>
+                                </View>
+                        </Modal>
+
+                        {/* Admin Detail Modal */}
+                        <Modal
+                                visible={showAdminDetailModal}
+                                transparent={true}
+                                animationType="fade"
+                                onRequestClose={() => setShowAdminDetailModal(false)}
+                        >
+                                <View style={styles.modalOverlay}>
+                                        <View style={[styles.modalContent, { backgroundColor: cardColor }]}>
+                                                {selectedAdmin && (
+                                                        <>
+                                                                <View style={styles.adminDetailHeader}>
+                                                                        <View style={[styles.adminDetailAvatar, { backgroundColor: primaryColor }]}>
+                                                                                <Text style={styles.adminDetailAvatarText}>
+                                                                                        {selectedAdmin.firstName.charAt(0)}{selectedAdmin.lastName.charAt(0)}
+                                                                                </Text>
+                                                                        </View>
+                                                                        <Text style={[styles.adminDetailName, { color: textColor }]}>
+                                                                                {selectedAdmin.fullName}
+                                                                        </Text>
+                                                                        {!selectedAdmin.isActive && (
+                                                                                <View style={[styles.inactiveBadge, { backgroundColor: mutedColor }]}>
+                                                                                        <Text style={styles.inactiveBadgeText}>Inactive</Text>
+                                                                                </View>
+                                                                        )}
+                                                                </View>
+
+                                                                <View style={styles.contactInfoSection}>
+                                                                        <Text style={[styles.contactLabel, { color: mutedColor }]}>Email</Text>
+                                                                        <TouchableOpacity
+                                                                                style={[styles.contactButton, { backgroundColor: primaryColor }]}
+                                                                                onPress={() => handleEmailAdmin(selectedAdmin.email)}
+                                                                        >
+                                                                                <Text style={styles.contactButtonIcon}>📧</Text>
+                                                                                <Text style={styles.contactButtonText}>{selectedAdmin.email}</Text>
+                                                                        </TouchableOpacity>
+                                                                </View>
+
+                                                                <View style={styles.contactInfoSection}>
+                                                                        <Text style={[styles.contactLabel, { color: mutedColor }]}>Phone</Text>
+                                                                        {selectedAdmin.phoneNumber ? (
+                                                                                <TouchableOpacity
+                                                                                        style={[styles.contactButton, { backgroundColor: secondaryColor }]}
+                                                                                        onPress={() => handleCallAdmin(selectedAdmin.phoneNumber!)}
+                                                                                >
+                                                                                        <Text style={styles.contactButtonIcon}>📞</Text>
+                                                                                        <Text style={styles.contactButtonText}>{selectedAdmin.phoneNumber}</Text>
+                                                                                </TouchableOpacity>
+                                                                        ) : (
+                                                                                <Text style={[styles.noPhoneText, { color: mutedColor }]}>
+                                                                                        No phone number available
+                                                                                </Text>
+                                                                        )}
+                                                                </View>
+                                                        </>
+                                                )}
+
+                                                <View style={styles.adminDetailButtons}>
+                                                        <TouchableOpacity
+                                                                style={[styles.backButton, { backgroundColor: mutedColor }]}
+                                                                onPress={() => {
+                                                                        setShowAdminDetailModal(false);
+                                                                        setShowAdminListModal(true);
+                                                                }}
+                                                        >
+                                                                <Text style={styles.backButtonText}>Back to List</Text>
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity
+                                                                style={[styles.closeButton, { backgroundColor: dangerColor }]}
+                                                                onPress={() => setShowAdminDetailModal(false)}
+                                                        >
+                                                                <Text style={styles.closeButtonText}>Close</Text>
                                                         </TouchableOpacity>
                                                 </View>
                                         </View>
@@ -777,6 +1002,22 @@ const styles = StyleSheet.create({
                 fontSize: 16,
                 fontWeight: '600',
         },
+        contactSupportButton: {
+                borderRadius: 8,
+                padding: 16,
+                alignItems: 'center',
+                marginTop: 12,
+        },
+        contactSupportButtonText: {
+                color: '#ffffff',
+                fontSize: 16,
+                fontWeight: '600',
+        },
+        supportDescription: {
+                fontSize: 12,
+                marginTop: 8,
+                textAlign: 'center',
+        },
         logoutButton: {
                 borderRadius: 8,
                 padding: 16,
@@ -837,6 +1078,145 @@ const styles = StyleSheet.create({
         modalButtonText: {
                 color: '#fff',
                 fontSize: 16,
+                fontWeight: '600',
+        },
+        // Admin List Modal Styles
+        emptyListText: {
+                textAlign: 'center',
+                fontSize: 14,
+                marginVertical: 20,
+        },
+        adminList: {
+                maxHeight: 300,
+                marginBottom: 16,
+        },
+        adminListItem: {
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+        },
+        adminListItemContent: {
+                flexDirection: 'row',
+                alignItems: 'center',
+                flex: 1,
+        },
+        adminAvatar: {
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+        },
+        adminAvatarText: {
+                color: '#ffffff',
+                fontSize: 14,
+                fontWeight: '600',
+        },
+        adminInfo: {
+                flex: 1,
+        },
+        adminName: {
+                fontSize: 16,
+                fontWeight: '600',
+                marginBottom: 2,
+        },
+        adminEmail: {
+                fontSize: 12,
+        },
+        inactiveBadge: {
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
+                marginLeft: 8,
+        },
+        inactiveBadgeText: {
+                color: '#ffffff',
+                fontSize: 10,
+                fontWeight: '600',
+        },
+        adminListArrow: {
+                fontSize: 24,
+                marginLeft: 8,
+        },
+        closeButton: {
+                padding: 14,
+                borderRadius: 8,
+                alignItems: 'center',
+                marginTop: 8,
+        },
+        closeButtonText: {
+                color: '#ffffff',
+                fontSize: 16,
+                fontWeight: '600',
+        },
+        // Admin Detail Modal Styles
+        adminDetailHeader: {
+                alignItems: 'center',
+                marginBottom: 24,
+        },
+        adminDetailAvatar: {
+                width: 60,
+                height: 60,
+                borderRadius: 30,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 12,
+        },
+        adminDetailAvatarText: {
+                color: '#ffffff',
+                fontSize: 20,
+                fontWeight: '700',
+        },
+        adminDetailName: {
+                fontSize: 20,
+                fontWeight: '700',
+                marginBottom: 8,
+        },
+        contactInfoSection: {
+                marginBottom: 16,
+        },
+        contactLabel: {
+                fontSize: 12,
+                fontWeight: '600',
+                marginBottom: 8,
+                textTransform: 'uppercase',
+        },
+        contactButton: {
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: 14,
+                borderRadius: 8,
+        },
+        contactButtonIcon: {
+                fontSize: 18,
+                marginRight: 10,
+        },
+        contactButtonText: {
+                color: '#ffffff',
+                fontSize: 14,
+                fontWeight: '500',
+        },
+        noPhoneText: {
+                fontSize: 14,
+                fontStyle: 'italic',
+        },
+        adminDetailButtons: {
+                flexDirection: 'row',
+                gap: 12,
+                marginTop: 16,
+        },
+        backButton: {
+                flex: 1,
+                padding: 14,
+                borderRadius: 8,
+                alignItems: 'center',
+        },
+        backButtonText: {
+                color: '#ffffff',
+                fontSize: 14,
                 fontWeight: '600',
         },
 });

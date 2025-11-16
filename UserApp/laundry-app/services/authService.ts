@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiPost, apiGet } from './api';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://140.245.51.90:23000/api';
 
 export interface LoginRequest {
   username: string;
@@ -35,7 +38,12 @@ export const authService = {
    * @throws Error if authentication fails or token storage fails
    */
   async login(data: LoginRequest): Promise<AuthResponse> {
-    const response = await apiPost('/auth/login', data);
+    // Use direct axios call for login to avoid 401 interception
+    // (401 on login means wrong credentials, not expired token)
+    const response = await axios.post(`${API_BASE_URL}/auth/login`, data, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000
+    });
     const authData = response.data;
 
     // Store token and user data securely

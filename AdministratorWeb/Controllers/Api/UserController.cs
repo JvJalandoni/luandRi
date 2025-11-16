@@ -53,6 +53,7 @@ namespace AdministratorWeb.Controllers.Api
                     lastName = u.LastName,
                     fullName = u.FullName,
                     email = u.Email,
+                    phoneNumber = u.PhoneNumber, // Include phone for contact support
                     isActive = u.IsActive // Include status for UI indication
                 })
                 .ToList();
@@ -161,6 +162,8 @@ namespace AdministratorWeb.Controllers.Api
             // DEBUG LOGGING
             Console.WriteLine($"[API PROFILE DEBUG] User ID: {user.Id}");
             Console.WriteLine($"[API PROFILE DEBUG] User Name: {user.UserName}");
+            Console.WriteLine($"[API PROFILE DEBUG] Email: '{user.Email ?? "NULL"}'");
+            Console.WriteLine($"[API PROFILE DEBUG] PhoneNumber: '{user.PhoneNumber ?? "NULL"}'");
             Console.WriteLine($"[API PROFILE DEBUG] RoomName: '{user.RoomName ?? "NULL"}'");
             Console.WriteLine($"[API PROFILE DEBUG] RoomDescription: '{user.RoomDescription ?? "NULL"}'");
             Console.WriteLine($"[API PROFILE DEBUG] AssignedBeaconMac: '{user.AssignedBeaconMacAddress ?? "NULL"}'");
