@@ -60,6 +60,11 @@ export default function ProfileScreen() {
         const [showPasswordModal, setShowPasswordModal] = useState(false);
         const [currentPassword, setCurrentPassword] = useState('');
 
+        // OTP verification state for email change
+        const [showOtpModal, setShowOtpModal] = useState(false);
+        const [otpCode, setOtpCode] = useState('');
+        const [pendingNewEmail, setPendingNewEmail] = useState('');
+
         // Change Password modal state
         const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
         const [changePasswordData, setChangePasswordData] = useState({
@@ -214,10 +219,25 @@ export default function ProfileScreen() {
                 const finalLastName = lastName.trim() || lastParts.join(' ') || '';
                 const finalEmail = email.trim() || user?.email || 'noemail@example.com';
 
-                // Check if email has changed - require password confirmation
+                // Check if email has changed - request OTP verification
                 if (finalEmail.toLowerCase() !== originalEmail.toLowerCase()) {
-                        console.log('🔒 Email changed - showing password confirmation');
-                        setShowPasswordModal(true);
+                        console.log('📧 Email changed - requesting OTP');
+                        setIsLoading(true);
+                        try {
+                                const result = await userService.requestEmailChange({
+                                        newEmail: finalEmail,
+                                        currentPassword: '' // No password required
+                                });
+                                console.log('📧 OTP sent to current email');
+                                setPendingNewEmail(finalEmail);
+                                setShowOtpModal(true);
+                                showAlert('Success', result.message || 'Verification code sent to your current email address');
+                        } catch (error: any) {
+                                const errorMsg = error.response?.data?.message || 'Failed to send verification code';
+                                showAlert('Error', errorMsg);
+                        } finally {
+                                setIsLoading(false);
+                        }
                         return;
                 }
 
@@ -232,6 +252,39 @@ export default function ProfileScreen() {
                 const finalLastName = lastName.trim() || lastParts.join(' ') || '';
                 const finalEmail = email.trim() || user?.email || 'noemail@example.com';
 
+                // If password is provided, it means we're changing email - use OTP flow
+                if (password && finalEmail.toLowerCase() !== originalEmail.toLowerCase()) {
+                        setIsLoading(true);
+                        try {
+                                // Request OTP for email change
+                                const result = await userService.requestEmailChange({
+                                        newEmail: finalEmail,
+                                        currentPassword: password
+                                });
+
+                                console.log('📧 OTP sent to new email');
+                                setPendingNewEmail(finalEmail);
+                                setShowPasswordModal(false);
+                                setCurrentPassword('');
+                                setShowOtpModal(true);
+                                showAlert('Success', result.message || 'Verification code sent to your new email address');
+                        } catch (error: any) {
+                                const errorMsg = error.response?.data?.message || 'Failed to send verification code';
+                                showAlert('Error', errorMsg);
+
+                                // If password was wrong, keep modal open
+                                if (errorMsg.toLowerCase().includes('password')) {
+                                        setCurrentPassword(''); // Clear password field
+                                } else {
+                                        setShowPasswordModal(false);
+                                }
+                        } finally {
+                                setIsLoading(false);
+                        }
+                        return;
+                }
+
+                // Normal profile update (no email change)
                 setIsLoading(true);
                 try {
                         const result = await userService.updateProfile({
@@ -239,7 +292,6 @@ export default function ProfileScreen() {
                                 lastName: finalLastName,
                                 email: finalEmail,
                                 phone: phone.trim() || undefined,
-                                currentPassword: password, // Send password if email changed
                         });
 
                         await refreshProfile(); // Refresh to show updated data
@@ -250,13 +302,37 @@ export default function ProfileScreen() {
                 } catch (error: any) {
                         const errorMsg = error.response?.data?.message || 'Failed to update profile';
                         showAlert('Error', errorMsg);
+                } finally {
+                        setIsLoading(false);
+                }
+        };
 
-                        // If password was wrong, keep modal open
-                        if (errorMsg.toLowerCase().includes('password')) {
-                                setCurrentPassword(''); // Clear password field
-                        } else {
-                                setShowPasswordModal(false);
-                        }
+        const handleVerifyOtp = async () => {
+                if (!otpCode.trim()) {
+                        showAlert('Error', 'Please enter the verification code');
+                        return;
+                }
+
+                setIsLoading(true);
+                try {
+                        const result = await userService.verifyEmailChange({ otpCode: otpCode.trim() });
+                        console.log('✅ Email changed successfully');
+
+                        // Update local state with new email
+                        setEmail(result.newEmail || pendingNewEmail);
+                        setOriginalEmail(result.newEmail || pendingNewEmail);
+
+                        setShowOtpModal(false);
+                        setOtpCode('');
+                        setPendingNewEmail('');
+                        setIsEditing(false);
+
+                        await refreshProfile();
+                        showAlert('Success', 'Email changed successfully');
+                } catch (error: any) {
+                        const errorMsg = error.response?.data?.message || 'Invalid verification code';
+                        showAlert('Error', errorMsg);
+                        setOtpCode(''); // Clear OTP field
                 } finally {
                         setIsLoading(false);
                 }
@@ -582,7 +658,7 @@ export default function ProfileScreen() {
                                                         Confirm Password
                                                 </Text>
                                                 <Text style={[styles.modalDescription, { color: mutedColor }]}>
-                                                        You are changing your email address. Please enter your current password to confirm.
+                                                        You are changing your email address. Please enter your current password to confirm. A verification code will be sent to your current email for security.
                                                 </Text>
 
                                                 <TextInput
@@ -615,7 +691,67 @@ export default function ProfileScreen() {
                                                                 {isLoading ? (
                                                                         <ActivityIndicator color="#fff" />
                                                                 ) : (
-                                                                        <Text style={styles.modalButtonText}>Confirm</Text>
+                                                                        <Text style={styles.modalButtonText}>Send Code</Text>
+                                                                )}
+                                                        </TouchableOpacity>
+                                                </View>
+                                        </View>
+                                </View>
+                        </Modal>
+
+                        {/* OTP Verification Modal */}
+                        <Modal
+                                visible={showOtpModal}
+                                transparent={true}
+                                animationType="fade"
+                                onRequestClose={() => {
+                                        setShowOtpModal(false);
+                                        setOtpCode('');
+                                        setPendingNewEmail('');
+                                }}
+                        >
+                                <View style={styles.modalOverlay}>
+                                        <View style={[styles.modalContent, { backgroundColor: cardColor }]}>
+                                                <Text style={[styles.modalTitle, { color: textColor }]}>
+                                                        Enter Verification Code
+                                                </Text>
+                                                <Text style={[styles.modalDescription, { color: mutedColor }]}>
+                                                        We've sent a 6-digit verification code to your current email address ({originalEmail}). Please enter it below to confirm changing your email to {pendingNewEmail}.
+                                                </Text>
+
+                                                <TextInput
+                                                        style={[styles.modalInput, { borderColor, color: textColor, fontSize: 24, textAlign: 'center', letterSpacing: 10 }]}
+                                                        placeholder="000000"
+                                                        placeholderTextColor={mutedColor}
+                                                        value={otpCode}
+                                                        onChangeText={(text) => setOtpCode(text.replace(/[^0-9]/g, '').slice(0, 6))}
+                                                        keyboardType="number-pad"
+                                                        maxLength={6}
+                                                        autoFocus
+                                                />
+
+                                                <View style={styles.modalButtons}>
+                                                        <TouchableOpacity
+                                                                style={[styles.modalButton, styles.cancelButton, { backgroundColor: mutedColor }]}
+                                                                onPress={() => {
+                                                                        setShowOtpModal(false);
+                                                                        setOtpCode('');
+                                                                        setPendingNewEmail('');
+                                                                }}
+                                                                disabled={isLoading}
+                                                        >
+                                                                <Text style={styles.modalButtonText}>Cancel</Text>
+                                                        </TouchableOpacity>
+
+                                                        <TouchableOpacity
+                                                                style={[styles.modalButton, { backgroundColor: primaryColor }]}
+                                                                onPress={handleVerifyOtp}
+                                                                disabled={isLoading || otpCode.length !== 6}
+                                                        >
+                                                                {isLoading ? (
+                                                                        <ActivityIndicator color="#fff" />
+                                                                ) : (
+                                                                        <Text style={styles.modalButtonText}>Verify</Text>
                                                                 )}
                                                         </TouchableOpacity>
                                                 </View>

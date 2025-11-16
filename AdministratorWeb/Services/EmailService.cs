@@ -45,9 +45,18 @@ namespace AdministratorWeb.Services
 
         public async Task<bool> SendEmailAsync(string toEmail, string toName, string subject, string htmlBody, string textBody = "")
         {
+            _logger.LogInformation("=== EmailService v2.0 SendEmailAsync ===");
+            _logger.LogInformation("EmailService: To={ToEmail}, Subject={Subject}, HtmlBodyLength={HtmlLength}", toEmail, subject, htmlBody?.Length ?? 0);
+
             if (!_emailSettings.EmailEnabled)
             {
                 _logger.LogWarning("Email sending is disabled in configuration. Email to {ToEmail} was not sent.", toEmail);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(htmlBody))
+            {
+                _logger.LogError("EmailService: HTML body is NULL or EMPTY! Cannot send email.");
                 return false;
             }
 
@@ -55,6 +64,8 @@ namespace AdministratorWeb.Services
             {
                 textBody = StripHtml(htmlBody);
             }
+
+            _logger.LogInformation("EmailService: TextBody length after strip = {TextLength}", textBody?.Length ?? 0);
 
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(_emailSettings.FromName, _emailSettings.FromEmail));
@@ -77,6 +88,7 @@ namespace AdministratorWeb.Services
             };
 
             message.Body = builder.ToMessageBody();
+            _logger.LogInformation("EmailService: MimeMessage created, Body type = {BodyType}", message.Body?.GetType().Name ?? "NULL");
 
             int attempts = 0;
             int delay = _emailSettings.RetryDelayMilliseconds;

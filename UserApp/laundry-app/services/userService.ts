@@ -212,5 +212,43 @@ export const userService = {
     });
 
     return response.data;
+  },
+
+  async requestEmailChange(data: { newEmail: string; currentPassword: string }): Promise<{ success: boolean; message: string; expiresAt?: string }> {
+    console.log('📧 Requesting email change OTP via POST /user/request-email-change');
+
+    const token = await AsyncStorage.getItem('jwt_token');
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
+    const response = await axios.post('http://140.245.51.90:23000/api/user/request-email-change', data, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000
+    });
+
+    return response.data;
+  },
+
+  async verifyEmailChange(data: { otpCode: string }): Promise<{ success: boolean; message: string; newEmail?: string }> {
+    console.log('✅ Verifying email change OTP via POST /user/verify-email-change');
+
+    const token = await AsyncStorage.getItem('jwt_token');
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
+    const response = await axios.post('http://140.245.51.90:23000/api/user/verify-email-change', data, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000
+    });
+
+    return response.data;
   }
 };
