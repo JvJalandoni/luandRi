@@ -412,19 +412,6 @@ namespace AdministratorWeb.Controllers.Api
                 return BadRequest(new { success = false, message = "New email is the same as current email" });
             }
 
-            // Verify current password
-            if (string.IsNullOrWhiteSpace(request.CurrentPassword))
-            {
-                return BadRequest(new { success = false, message = "Current password is required" });
-            }
-
-            var passwordValid = await _userManager.CheckPasswordAsync(user, request.CurrentPassword);
-            if (!passwordValid)
-            {
-                Console.WriteLine("[API] ❌ Current password is incorrect");
-                return BadRequest(new { success = false, message = "Current password is incorrect" });
-            }
-
             // Check if new email already exists
             var existingUser = await _userManager.FindByEmailAsync(request.NewEmail);
             if (existingUser != null)
@@ -432,9 +419,8 @@ namespace AdministratorWeb.Controllers.Api
                 return BadRequest(new { success = false, message = "Email already in use by another account" });
             }
 
-            // Generate 6-digit OTP
-            var random = new Random();
-            var otpCode = random.Next(100000, 999999).ToString();
+            // Generate 6-digit numeric OTP
+            var otpCode = Random.Shared.Next(100000, 999999).ToString();
 
             // Delete any existing OTP for this user
             var existingOtps = _context.OTPCodes
@@ -456,16 +442,16 @@ namespace AdministratorWeb.Controllers.Api
             _context.OTPCodes.Add(otp);
             await _context.SaveChangesAsync();
 
-            // Send OTP email to NEW email address
+            // Send OTP email to OLD/CURRENT email address (security measure)
             try
             {
                 await _emailService.SendEmailChangeOTPAsync(
                     customerId,
-                    request.NewEmail.Trim(),
+                    user.Email!,  // Send to CURRENT email for security
                     user.FullName,
                     otpCode
                 );
-                Console.WriteLine($"[API] ✅ OTP email sent to {request.NewEmail}");
+                Console.WriteLine($"[API] ✅ OTP email sent to current email {user.Email}");
             }
             catch (Exception ex)
             {
@@ -476,7 +462,7 @@ namespace AdministratorWeb.Controllers.Api
             return Ok(new
             {
                 success = true,
-                message = $"Verification code sent to {request.NewEmail}. Please check your email.",
+                message = $"Verification code sent to your current email address. Please check your inbox.",
                 expiresAt = otp.ExpiresAt
             });
         }
@@ -510,20 +496,47 @@ namespace AdministratorWeb.Controllers.Api
                 return BadRequest(new { success = false, message = "OTP code is required" });
             }
 
-            // Find OTP in database
-            var otp = await _context.OTPCodes
-                .FirstOrDefaultAsync(o =>
-                    o.UserId == customerId &&
-                    o.Code == request.OtpCode.Trim() &&
-                    o.Purpose == "EmailChange" &&
-                    !o.IsUsed &&
-                    o.ExpiresAt > DateTime.UtcNow);
+            // Find OTP in database - get the most recent one for this user
+            var otpCodeInput = request.OtpCode.Trim();
+            Console.WriteLine($"[API] Looking for OTP: '{otpCodeInput}' for user {customerId}");
 
-            if (otp == null)
+            // Get the most recent OTP for this user (regardless of status)
+            var latestOtp = await _context.OTPCodes
+                .Where(o => o.UserId == customerId && o.Purpose == "EmailChange")
+                .OrderByDescending(o => o.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (latestOtp == null)
             {
-                Console.WriteLine("[API] ❌ Invalid or expired OTP");
-                return BadRequest(new { success = false, message = "Invalid or expired verification code" });
+                Console.WriteLine($"[API] ❌ No OTP found for user");
+                return BadRequest(new { success = false, message = "No verification code found. Please request a new one." });
             }
+
+            Console.WriteLine($"[API] Latest OTP in DB: Code='{latestOtp.Code}', IsUsed={latestOtp.IsUsed}, Expires={latestOtp.ExpiresAt} UTC, Now={DateTime.UtcNow} UTC");
+
+            // Check if codes match
+            if (latestOtp.Code != otpCodeInput)
+            {
+                Console.WriteLine($"[API] ❌ Code mismatch. DB has '{latestOtp.Code}', user entered '{otpCodeInput}'");
+                return BadRequest(new { success = false, message = "Invalid verification code" });
+            }
+
+            // Check if already used (Verified is the actual DB column, IsUsed is just an alias)
+            if (latestOtp.Verified)
+            {
+                Console.WriteLine($"[API] ❌ OTP already used");
+                return BadRequest(new { success = false, message = "This verification code has already been used" });
+            }
+
+            // Check if expired
+            if (latestOtp.ExpiresAt <= DateTime.UtcNow)
+            {
+                Console.WriteLine($"[API] ❌ OTP expired. Expired at {latestOtp.ExpiresAt}, now is {DateTime.UtcNow}");
+                return BadRequest(new { success = false, message = "Verification code has expired. Please request a new one." });
+            }
+
+            Console.WriteLine($"[API] ✅ OTP validated successfully!");
+            var otp = latestOtp;
 
             var oldEmail = user.Email;
             var newEmail = otp.NewEmail;

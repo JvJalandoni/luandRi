@@ -81,7 +81,8 @@ namespace AdministratorWeb.Services
                 { "companyName", "LuandRi Laundry Service" },
                 { "supportEmail", "luandricorp@gmail.com" },
                 { "date", DateTime.Now.ToString("MMMM dd, yyyy") },
-                { "time", DateTime.Now.ToString("hh:mm tt") }
+                { "time", DateTime.Now.ToString("hh:mm tt") },
+                { "currentYear", DateTime.Now.Year.ToString() }
             };
         }
 
@@ -89,16 +90,82 @@ namespace AdministratorWeb.Services
         {
             try
             {
-                var template = LoadTemplate("email_change_otp");
-                if (string.IsNullOrEmpty(template)) return;
+                _logger.LogInformation("=== EMAIL OTP SERVICE v4.0 HTML FIX ===");
+                _logger.LogInformation("SendEmailChangeOTPAsync: user={UserId}, email={Email}, OTP={OtpCode}", userId, email, otpCode);
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", userName);
-                variables.Add("email", email);
-                variables.Add("otpCode", otpCode);
+                var currentYear = DateTime.Now.Year.ToString();
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(email, userName, "Email Verification Code - LuandRi", htmlBody);
+                // v4.0: Proper HTML body with DOCTYPE and structure
+                var htmlBody = $@"<!DOCTYPE html>
+<html>
+<head>
+<meta charset=""UTF-8"">
+<meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+<title>Email Verification Code</title>
+</head>
+<body style=""margin:0;padding:0;font-family:Arial,sans-serif;background-color:#ffffff;"">
+<table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"">
+<tr>
+<td align=""center"" style=""padding:48px 24px;"">
+<table width=""560"" cellpadding=""0"" cellspacing=""0"" border=""0"">
+<tr>
+<td style=""padding-bottom:32px;"">
+<span style=""font-size:18px;font-weight:bold;color:#111827;"">LuandRi</span>
+</td>
+</tr>
+<tr>
+<td>
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Confirm your email change</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">You requested to change your email address. Use this code to verify:</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;text-align:center;margin:0 0 24px 0;"">
+<span style=""font-size:28px;font-weight:bold;letter-spacing:6px;color:#111827;font-family:monospace;"">{otpCode}</span>
+</div>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">This code expires in 15 minutes.</p>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">If you didn't request this change, you can ignore this email.</p>
+<div style=""border-top:1px solid #e5e7eb;padding-top:24px;"">
+<p style=""margin:0;font-size:14px;color:#6b7280;""><strong style=""color:#374151;"">Security tip:</strong> Never share this code with anyone.</p>
+</div>
+</td>
+</tr>
+<tr>
+<td style=""padding-top:48px;"">
+<p style=""margin:0 0 4px 0;font-size:14px;color:#9ca3af;"">LuandRi Laundry Service</p>
+<p style=""margin:0;font-size:12px;color:#9ca3af;"">&copy; {currentYear} LuandRi</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>";
+
+                // Plain text fallback for email clients that don't support HTML
+                var textBody = $@"LuandRi - Email Verification Code
+
+Hi {userName},
+
+You requested to change your email address. Use this code to verify:
+
+{otpCode}
+
+This code expires in 15 minutes.
+
+If you didn't request this change, you can ignore this email.
+
+Security tip: Never share this code with anyone.
+
+---
+LuandRi Laundry Service
+(c) {currentYear} LuandRi";
+
+                _logger.LogInformation("SendEmailChangeOTPAsync: HTML length={HtmlLen}, Text length={TextLen}", htmlBody.Length, textBody.Length);
+
+                // CORRECT: htmlBody = actual HTML, textBody = plain text fallback
+                var result = await _emailService.SendEmailAsync(email, userName, "Email Verification Code - LuandRi", htmlBody, textBody);
+                _logger.LogInformation("SendEmailChangeOTPAsync: Email send result = {Result}", result);
+                _logger.LogInformation("=== EMAIL OTP SERVICE v4.0 COMPLETE ===");
 
                 await LogEmailAsync(userId, "EmailChangeOTP", email, "Email Verification Code");
             }

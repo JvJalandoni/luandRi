@@ -29,4 +29,8 @@
       <ProjectReference Include="..\RobotProject.Shared\RobotProject.Shared.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Content Include="Views\EmailTemplates\**\*.html" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+
 </Project>
