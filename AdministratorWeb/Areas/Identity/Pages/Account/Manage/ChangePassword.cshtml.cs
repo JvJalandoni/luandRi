@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using AdministratorWeb.Models;
+using AdministratorWeb.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -14,15 +15,18 @@ namespace AdministratorWeb.Areas.Identity.Pages.Account.Manage
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly ILogger<ChangePasswordModel> _logger;
+        private readonly IEmailNotificationService _emailService;
 
         public ChangePasswordModel(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
-            ILogger<ChangePasswordModel> logger)
+            ILogger<ChangePasswordModel> logger,
+            IEmailNotificationService emailService)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _logger = logger;
+            _emailService = emailService;
         }
 
         [BindProperty]
@@ -92,6 +96,19 @@ namespace AdministratorWeb.Areas.Identity.Pages.Account.Manage
 
             await _signInManager.RefreshSignInAsync(user);
             _logger.LogInformation("User changed their password successfully.");
+
+            // Send password changed notification email
+            try
+            {
+                await _emailService.SendPasswordChangedAsync(user.Id, user.FullName);
+                _logger.LogInformation("Password change notification email sent to {Email}", user.Email);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send password change notification email");
+                // Don't fail the password change if email fails
+            }
+
             StatusMessage = "Your password has been changed.";
 
             return RedirectToPage();

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using AdministratorWeb.Data;
 using AdministratorWeb.Models;
 using AdministratorWeb.Models.DTOs;
+using AdministratorWeb.Services;
 
 namespace AdministratorWeb.Controllers
 {
@@ -15,10 +16,12 @@ namespace AdministratorWeb.Controllers
     public class AccountingController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly IEmailNotificationService _emailService;
 
-        public AccountingController(ApplicationDbContext context)
+        public AccountingController(ApplicationDbContext context, IEmailNotificationService emailService)
         {
             _context = context;
+            _emailService = emailService;
         }
 
         public async Task<IActionResult> Index()
@@ -317,6 +320,22 @@ namespace AdministratorWeb.Controllers
             _context.AccountingActionLogs.Add(auditLog);
             await _context.SaveChangesAsync();
 
+            // Send payment completed email
+            try
+            {
+                await _emailService.SendPaymentCompletedAsync(
+                    request.CustomerId,
+                    requestId,
+                    paymentToReceipt.Amount,
+                    paymentMethod.ToString(),
+                    adminUser?.FullName
+                );
+            }
+            catch
+            {
+                // Don't fail the payment if email fails
+            }
+
             // Auto-generate receipt (for record keeping)
             try
             {
@@ -393,6 +412,22 @@ namespace AdministratorWeb.Controllers
             // Creating an adjustment would double-count the refund.
 
             await _context.SaveChangesAsync();
+
+            // Send refund issued email
+            try
+            {
+                await _emailService.SendRefundIssuedAsync(
+                    payment.CustomerId,
+                    payment.LaundryRequestId,
+                    refundAmount,
+                    refundReason,
+                    adminUser?.FullName
+                );
+            }
+            catch
+            {
+                // Don't fail the refund if email fails
+            }
 
             // Send refund notification to customer
             try

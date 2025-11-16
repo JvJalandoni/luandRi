@@ -1,0 +1,86 @@
+@{
+    ViewData["Title"] = "Email Test";
+}
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">📧 Email SMTP Test</h4>
+                </div>
+                <div class="card-body">
+                    @if (TempData["Success"] != null)
+                    {
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <strong>@TempData["Success"]</strong>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    }
+
+                    @if (TempData["Error"] != null)
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <strong>@TempData["Error"]</strong>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    }
+
+                    <div class="alert alert-info">
+                        <h5 class="alert-heading">📬 Test Your Email Configuration</h5>
+                        <p class="mb-0">
+                            Send a test email to verify that Gmail SMTP is working correctly with your App Password.
+                        </p>
+                    </div>
+
+                    <form method="post" asp-action="SendTest">
+                        <div class="mb-3">
+                            <label for="toEmail" class="form-label">Recipient Email Address</label>
+                            <input type="email"
+                                   class="form-control form-control-lg"
+                                   id="toEmail"
+                                   name="toEmail"
+                                   placeholder="your-email@example.com"
+                                   required>
+                            <div class="form-text">Enter your email address to receive the test email.</div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-send"></i> Send Test Email
+                            </button>
+                        </div>
+                    </form>
+
+                    <hr class="my-4">
+
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h6 class="card-title">📋 Current SMTP Settings:</h6>
+                            <ul class="list-unstyled mb-0">
+                                <li><strong>Host:</strong> smtp.gmail.com</li>
+                                <li><strong>Port:</strong> 587</li>
+                                <li><strong>Username:</strong> luandricorp@gmail.com</li>
+                                <li><strong>From Name:</strong> LuandRi Laundry Service</li>
+                                <li><strong>SSL/TLS:</strong> Enabled</li>
+                                <li><strong>Max Retries:</strong> 3</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <strong>Note:</strong> If the test fails, check:
+                            <ul class="mt-2">
+                                <li>Gmail App Password is correct in appsettings.json</li>
+                                <li>2-Factor Authentication is enabled on Gmail</li>
+                                <li>Server can connect to smtp.gmail.com on port 587</li>
+                                <li>Check application logs for detailed error messages</li>
+                            </ul>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AdministratorWeb.Data;
 using AdministratorWeb.Models;
+using AdministratorWeb.Services;
 
 namespace AdministratorWeb.Controllers
 {
@@ -18,17 +19,20 @@ namespace AdministratorWeb.Controllers
         private readonly ILogger<MessagesController> _logger;
         private readonly IWebHostEnvironment _env;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IEmailNotificationService _emailService;
 
         public MessagesController(
             ApplicationDbContext context,
             ILogger<MessagesController> logger,
             IWebHostEnvironment env,
-            UserManager<ApplicationUser> userManager)
+            UserManager<ApplicationUser> userManager,
+            IEmailNotificationService emailService)
         {
             _context = context;
             _logger = logger;
             _env = env;
             _userManager = userManager;
+            _emailService = emailService;
         }
 
         /// <summary>
@@ -214,6 +218,24 @@ namespace AdministratorWeb.Controllers
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Admin {AdminName} sent message to customer {CustomerId}", adminName, customerId);
+
+            // Send email notification to customer
+            try
+            {
+                await _emailService.SendAdminMessageAsync(
+                    customerId,
+                    $"{customer.FirstName} {customer.LastName}",
+                    customer.Email!,
+                    adminName,
+                    content ?? "[Image message]"
+                );
+                _logger.LogInformation("Email notification sent to customer {CustomerId} for admin message", customerId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send email notification for admin message to customer {CustomerId}", customerId);
+                // Don't fail the message send if email fails
+            }
 
             return Json(new
             {
