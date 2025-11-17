@@ -293,20 +293,6 @@ namespace AdministratorWeb.Controllers
                 _context.RequestActionLogs.Add(completeLog);
                 await _context.SaveChangesAsync();
 
-                // Send request completed email
-                try
-                {
-                    await _emailService.SendRequestCompletedAsync(
-                        request.CustomerId,
-                        requestId,
-                        request.AssignedRobotName ?? "Robot"
-                    );
-                }
-                catch
-                {
-                    // Don't fail the request if email fails
-                }
-
                 _logger.LogInformation("Request {RequestId} completed by user {UserId}",
                     requestId, User.Identity?.Name);
 
