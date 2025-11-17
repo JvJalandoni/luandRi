@@ -17,11 +17,13 @@ namespace AdministratorWeb.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IEmailNotificationService _emailService;
+        private readonly ILogger<AccountingController> _logger;
 
-        public AccountingController(ApplicationDbContext context, IEmailNotificationService emailService)
+        public AccountingController(ApplicationDbContext context, IEmailNotificationService emailService, ILogger<AccountingController> logger)
         {
             _context = context;
             _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<IActionResult> Index()
@@ -331,9 +333,10 @@ namespace AdministratorWeb.Controllers
                     adminUser?.FullName
                 );
             }
-            catch
+            catch (Exception ex)
             {
-                // Don't fail the payment if email fails
+                // Log error but don't fail the payment if email fails
+                _logger.LogError(ex, "Failed to send payment completed email for request {RequestId}", requestId);
             }
 
             // Auto-generate receipt (for record keeping)
@@ -651,6 +654,23 @@ namespace AdministratorWeb.Controllers
             };
             _context.AccountingActionLogs.Add(auditLog);
             await _context.SaveChangesAsync();
+
+            // Send payment completed email
+            try
+            {
+                await _emailService.SendPaymentCompletedAsync(
+                    payment.CustomerId,
+                    payment.LaundryRequestId,
+                    payment.Amount,
+                    payment.Method.ToString(),
+                    adminUser?.FullName
+                );
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the payment if email fails
+                _logger.LogError(ex, "Failed to send payment completed email for payment {PaymentId}", paymentId);
+            }
 
             // Generate receipt for the confirmed payment
             Receipt? receipt = null;
