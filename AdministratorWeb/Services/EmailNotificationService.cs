@@ -27,81 +27,24 @@ namespace AdministratorWeb.Services
     public class EmailNotificationService : IEmailNotificationService
     {
         private readonly IEmailService _emailService;
-        private readonly IEmailTemplateService _templateService;
         private readonly ApplicationDbContext _context;
         private readonly ILogger<EmailNotificationService> _logger;
-        private readonly IWebHostEnvironment _env;
 
         public EmailNotificationService(
             IEmailService emailService,
-            IEmailTemplateService templateService,
             ApplicationDbContext context,
-            ILogger<EmailNotificationService> logger,
-            IWebHostEnvironment env)
+            ILogger<EmailNotificationService> logger)
         {
             _emailService = emailService;
-            _templateService = templateService;
             _context = context;
             _logger = logger;
-            _env = env;
         }
 
-        private async Task<bool> CheckUserPreferencesAsync(string userId, string notificationType)
-        {
-            var preferences = await _context.EmailPreferences
-                .FirstOrDefaultAsync(p => p.UserId == userId);
-
-            if (preferences == null || !preferences.EmailNotificationsEnabled)
-                return false;
-
-            return notificationType switch
-            {
-                "payment" => preferences.PaymentNotifications,
-                "request" => preferences.RequestStatusNotifications,
-                "security" => preferences.SecurityNotifications,
-                _ => true
-            };
-        }
-
-        private string LoadTemplate(string templateName)
-        {
-            var templatePath = Path.Combine(_env.ContentRootPath, "Views", "EmailTemplates", $"{templateName}.html");
-            if (!File.Exists(templatePath))
-            {
-                _logger.LogError("Email template not found: {TemplatePath}", templatePath);
-                return string.Empty;
-            }
-            return File.ReadAllText(templatePath);
-        }
-
-        private Dictionary<string, string> GetBaseVariables()
-        {
-            return new Dictionary<string, string>
-            {
-                { "companyName", "LuandRi Laundry Service" },
-                { "supportEmail", "luandricorp@gmail.com" },
-                { "date", DateTime.Now.ToString("MMMM dd, yyyy") },
-                { "time", DateTime.Now.ToString("hh:mm tt") },
-                { "currentYear", DateTime.Now.Year.ToString() }
-            };
-        }
-
-        public async Task SendEmailChangeOTPAsync(string userId, string email, string userName, string otpCode)
-        {
-            try
-            {
-                _logger.LogInformation("=== EMAIL OTP SERVICE v4.0 HTML FIX ===");
-                _logger.LogInformation("SendEmailChangeOTPAsync: user={UserId}, email={Email}, OTP={OtpCode}", userId, email, otpCode);
-
-                var currentYear = DateTime.Now.Year.ToString();
-
-                // v4.0: Proper HTML body with DOCTYPE and structure
-                var htmlBody = $@"<!DOCTYPE html>
+        private string GetEmailHeader() => @"<!DOCTYPE html>
 <html>
 <head>
 <meta charset=""UTF-8"">
-<meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-<title>Email Verification Code</title>
+<title>LuandRi</title>
 </head>
 <body style=""margin:0;padding:0;font-family:Arial,sans-serif;background-color:#ffffff;"">
 <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"">
@@ -114,7 +57,31 @@ namespace AdministratorWeb.Services
 </td>
 </tr>
 <tr>
-<td>
+<td>";
+
+        private string GetEmailFooter(string year) => $@"</td>
+</tr>
+<tr>
+<td style=""padding-top:48px;"">
+<p style=""margin:0 0 4px 0;font-size:14px;color:#9ca3af;"">LuandRi Laundry Service</p>
+<p style=""margin:0;font-size:12px;color:#9ca3af;"">&copy; {year} LuandRi</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>";
+
+        public async Task SendEmailChangeOTPAsync(string userId, string email, string userName, string otpCode)
+        {
+            try
+            {
+                _logger.LogInformation("SendEmailChangeOTPAsync: user={UserId}, email={Email}, OTP={OtpCode}", userId, email, otpCode);
+                var year = DateTime.Now.Year.ToString();
+
+                var htmlBody = GetEmailHeader() + $@"
 <h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Confirm your email change</h1>
 <p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
 <p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">You requested to change your email address. Use this code to verify:</p>
@@ -126,47 +93,11 @@ namespace AdministratorWeb.Services
 <div style=""border-top:1px solid #e5e7eb;padding-top:24px;"">
 <p style=""margin:0;font-size:14px;color:#6b7280;""><strong style=""color:#374151;"">Security tip:</strong> Never share this code with anyone.</p>
 </div>
-</td>
-</tr>
-<tr>
-<td style=""padding-top:48px;"">
-<p style=""margin:0 0 4px 0;font-size:14px;color:#9ca3af;"">LuandRi Laundry Service</p>
-<p style=""margin:0;font-size:12px;color:#9ca3af;"">&copy; {currentYear} LuandRi</p>
-</td>
-</tr>
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>";
+" + GetEmailFooter(year);
 
-                // Plain text fallback for email clients that don't support HTML
-                var textBody = $@"LuandRi - Email Verification Code
+                var textBody = $"LuandRi - Email Verification Code\n\nHi {userName},\n\nYour verification code is: {otpCode}\n\nThis code expires in 15 minutes.\n\n---\nLuandRi Laundry Service";
 
-Hi {userName},
-
-You requested to change your email address. Use this code to verify:
-
-{otpCode}
-
-This code expires in 15 minutes.
-
-If you didn't request this change, you can ignore this email.
-
-Security tip: Never share this code with anyone.
-
----
-LuandRi Laundry Service
-(c) {currentYear} LuandRi";
-
-                _logger.LogInformation("SendEmailChangeOTPAsync: HTML length={HtmlLen}, Text length={TextLen}", htmlBody.Length, textBody.Length);
-
-                // CORRECT: htmlBody = actual HTML, textBody = plain text fallback
-                var result = await _emailService.SendEmailAsync(email, userName, "Email Verification Code - LuandRi", htmlBody, textBody);
-                _logger.LogInformation("SendEmailChangeOTPAsync: Email send result = {Result}", result);
-                _logger.LogInformation("=== EMAIL OTP SERVICE v4.0 COMPLETE ===");
-
+                await _emailService.SendEmailAsync(email, userName, "Email Verification Code - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "EmailChangeOTP", email, "Email Verification Code");
             }
             catch (Exception ex)
@@ -179,25 +110,29 @@ LuandRi Laundry Service
         {
             try
             {
-                if (!await CheckUserPreferencesAsync(userId, "payment")) return;
-
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null) return;
 
-                var template = LoadTemplate("payment_completed");
-                if (string.IsNullOrEmpty(template)) return;
+                var userName = $"{user.FirstName} {user.LastName}";
+                var year = DateTime.Now.Year.ToString();
+                var date = DateTime.Now.ToString("MMMM dd, yyyy");
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", $"{user.FirstName} {user.LastName}");
-                variables.Add("requestId", requestId.ToString());
-                variables.Add("amount", amount.ToString("N2"));
-                variables.Add("paymentMethod", paymentMethod);
-                variables.Add("adminName", adminName ?? "Admin");
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Payment Received</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">We have received your payment. Thank you!</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;margin:0 0 24px 0;"">
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Request ID: <strong style=""color:#111827;"">#{requestId}</strong></p>
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Amount: <strong style=""color:#111827;"">₱{amount:N2}</strong></p>
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Payment Method: <strong style=""color:#111827;"">{paymentMethod}</strong></p>
+<p style=""margin:0;font-size:14px;color:#6b7280;"">Date: <strong style=""color:#111827;"">{date}</strong></p>
+</div>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">You can view your receipt in the mobile app.</p>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(user.Email!, $"{user.FirstName} {user.LastName}",
-                    "Payment Received - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Payment Received\n\nHi {userName},\n\nWe received your payment.\nRequest ID: #{requestId}\nAmount: P{amount:N2}\nMethod: {paymentMethod}\nDate: {date}\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(user.Email!, userName, "Payment Received - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "PaymentCompleted", user.Email!, "Payment Received");
             }
             catch (Exception ex)
@@ -210,25 +145,28 @@ LuandRi Laundry Service
         {
             try
             {
-                if (!await CheckUserPreferencesAsync(userId, "payment")) return;
-
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null) return;
 
-                var template = LoadTemplate("refund_issued");
-                if (string.IsNullOrEmpty(template)) return;
+                var userName = $"{user.FirstName} {user.LastName}";
+                var year = DateTime.Now.Year.ToString();
+                var date = DateTime.Now.ToString("MMMM dd, yyyy");
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", $"{user.FirstName} {user.LastName}");
-                variables.Add("requestId", requestId.ToString());
-                variables.Add("amount", amount.ToString("N2"));
-                variables.Add("reason", reason);
-                variables.Add("adminName", adminName ?? "Admin");
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Refund Issued</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">A refund has been issued for your request.</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;margin:0 0 24px 0;"">
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Request ID: <strong style=""color:#111827;"">#{requestId}</strong></p>
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Refund Amount: <strong style=""color:#111827;"">₱{amount:N2}</strong></p>
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Reason: <strong style=""color:#111827;"">{reason}</strong></p>
+<p style=""margin:0;font-size:14px;color:#6b7280;"">Date: <strong style=""color:#111827;"">{date}</strong></p>
+</div>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(user.Email!, $"{user.FirstName} {user.LastName}",
-                    "Refund Issued - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Refund Issued\n\nHi {userName},\n\nRefund issued for Request #{requestId}\nAmount: P{amount:N2}\nReason: {reason}\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(user.Email!, userName, "Refund Issued - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "RefundIssued", user.Email!, "Refund Issued");
             }
             catch (Exception ex)
@@ -241,24 +179,26 @@ LuandRi Laundry Service
         {
             try
             {
-                if (!await CheckUserPreferencesAsync(userId, "request")) return;
-
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null) return;
 
-                var template = LoadTemplate("request_accepted");
-                if (string.IsNullOrEmpty(template)) return;
+                var userName = $"{user.FirstName} {user.LastName}";
+                var year = DateTime.Now.Year.ToString();
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", $"{user.FirstName} {user.LastName}");
-                variables.Add("requestId", requestId.ToString());
-                variables.Add("robotName", robotName);
-                variables.Add("adminName", adminName ?? "Admin");
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Request Accepted</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Your laundry request has been accepted!</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;margin:0 0 24px 0;"">
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Request ID: <strong style=""color:#111827;"">#{requestId}</strong></p>
+<p style=""margin:0;font-size:14px;color:#6b7280;"">Assigned Robot: <strong style=""color:#111827;"">{robotName}</strong></p>
+</div>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">Track your request in the mobile app.</p>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(user.Email!, $"{user.FirstName} {user.LastName}",
-                    "Request Accepted - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Request Accepted\n\nHi {userName},\n\nRequest #{requestId} accepted.\nRobot: {robotName}\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(user.Email!, userName, "Request Accepted - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "RequestAccepted", user.Email!, "Request Accepted");
             }
             catch (Exception ex)
@@ -271,24 +211,25 @@ LuandRi Laundry Service
         {
             try
             {
-                if (!await CheckUserPreferencesAsync(userId, "request")) return;
-
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null) return;
 
-                var template = LoadTemplate("request_declined");
-                if (string.IsNullOrEmpty(template)) return;
+                var userName = $"{user.FirstName} {user.LastName}";
+                var year = DateTime.Now.Year.ToString();
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", $"{user.FirstName} {user.LastName}");
-                variables.Add("requestId", requestId.ToString());
-                variables.Add("reason", reason);
-                variables.Add("adminName", adminName ?? "Admin");
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Request Declined</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Unfortunately, your laundry request has been declined.</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;margin:0 0 24px 0;"">
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Request ID: <strong style=""color:#111827;"">#{requestId}</strong></p>
+<p style=""margin:0;font-size:14px;color:#6b7280;"">Reason: <strong style=""color:#111827;"">{reason}</strong></p>
+</div>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(user.Email!, $"{user.FirstName} {user.LastName}",
-                    "Request Declined - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Request Declined\n\nHi {userName},\n\nRequest #{requestId} declined.\nReason: {reason}\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(user.Email!, userName, "Request Declined - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "RequestDeclined", user.Email!, "Request Declined");
             }
             catch (Exception ex)
@@ -301,23 +242,26 @@ LuandRi Laundry Service
         {
             try
             {
-                if (!await CheckUserPreferencesAsync(userId, "request")) return;
-
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null) return;
 
-                var template = LoadTemplate("request_completed");
-                if (string.IsNullOrEmpty(template)) return;
+                var userName = $"{user.FirstName} {user.LastName}";
+                var year = DateTime.Now.Year.ToString();
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", $"{user.FirstName} {user.LastName}");
-                variables.Add("requestId", requestId.ToString());
-                variables.Add("robotName", robotName);
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Laundry Completed</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Great news! Your laundry has been completed.</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;margin:0 0 24px 0;"">
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Request ID: <strong style=""color:#111827;"">#{requestId}</strong></p>
+<p style=""margin:0;font-size:14px;color:#6b7280;"">Processed by: <strong style=""color:#111827;"">{robotName}</strong></p>
+</div>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">Your laundry will be delivered soon.</p>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(user.Email!, $"{user.FirstName} {user.LastName}",
-                    "Laundry Completed - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Laundry Completed\n\nHi {userName},\n\nRequest #{requestId} completed by {robotName}.\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(user.Email!, userName, "Laundry Completed - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "RequestCompleted", user.Email!, "Laundry Completed");
             }
             catch (Exception ex)
@@ -330,23 +274,26 @@ LuandRi Laundry Service
         {
             try
             {
-                if (!await CheckUserPreferencesAsync(userId, "request")) return;
-
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null) return;
 
-                var template = LoadTemplate("delivery_started");
-                if (string.IsNullOrEmpty(template)) return;
+                var userName = $"{user.FirstName} {user.LastName}";
+                var year = DateTime.Now.Year.ToString();
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", $"{user.FirstName} {user.LastName}");
-                variables.Add("requestId", requestId.ToString());
-                variables.Add("robotName", robotName);
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Delivery Started</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Your laundry is on its way!</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;margin:0 0 24px 0;"">
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Request ID: <strong style=""color:#111827;"">#{requestId}</strong></p>
+<p style=""margin:0;font-size:14px;color:#6b7280;"">Delivered by: <strong style=""color:#111827;"">{robotName}</strong></p>
+</div>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">Track delivery in the mobile app.</p>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(user.Email!, $"{user.FirstName} {user.LastName}",
-                    "Delivery Started - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Delivery Started\n\nHi {userName},\n\nRequest #{requestId} is being delivered by {robotName}.\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(user.Email!, userName, "Delivery Started - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "DeliveryStarted", user.Email!, "Delivery Started");
             }
             catch (Exception ex)
@@ -359,23 +306,26 @@ LuandRi Laundry Service
         {
             try
             {
-                if (!await CheckUserPreferencesAsync(userId, "request")) return;
-
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null) return;
 
-                var template = LoadTemplate("delivery_completed");
-                if (string.IsNullOrEmpty(template)) return;
+                var userName = $"{user.FirstName} {user.LastName}";
+                var year = DateTime.Now.Year.ToString();
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", $"{user.FirstName} {user.LastName}");
-                variables.Add("requestId", requestId.ToString());
-                variables.Add("robotName", robotName);
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Delivery Completed</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Your laundry has been delivered!</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;margin:0 0 24px 0;"">
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Request ID: <strong style=""color:#111827;"">#{requestId}</strong></p>
+<p style=""margin:0;font-size:14px;color:#6b7280;"">Delivered by: <strong style=""color:#111827;"">{robotName}</strong></p>
+</div>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">Thank you for using LuandRi!</p>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(user.Email!, $"{user.FirstName} {user.LastName}",
-                    "Delivery Completed - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Delivery Completed\n\nHi {userName},\n\nRequest #{requestId} delivered by {robotName}.\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(user.Email!, userName, "Delivery Completed - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "DeliveryCompleted", user.Email!, "Delivery Completed");
             }
             catch (Exception ex)
@@ -388,16 +338,24 @@ LuandRi Laundry Service
         {
             try
             {
-                var template = LoadTemplate("welcome");
-                if (string.IsNullOrEmpty(template)) return;
+                var year = DateTime.Now.Year.ToString();
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", userName);
-                variables.Add("email", email);
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Welcome to LuandRi!</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Thank you for joining LuandRi Laundry Service. We're excited to have you!</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">With LuandRi, you can:</p>
+<ul style=""margin:0 0 24px 0;padding-left:20px;font-size:16px;color:#374151;"">
+<li>Request laundry pickup from your room</li>
+<li>Track your laundry in real-time</li>
+<li>View payment history and receipts</li>
+</ul>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">Download our mobile app to get started!</p>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(email, userName, "Welcome to LuandRi Laundry Service", htmlBody);
+                var textBody = $"Welcome to LuandRi!\n\nHi {userName},\n\nThank you for joining LuandRi Laundry Service.\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(email, userName, "Welcome to LuandRi Laundry Service", htmlBody, textBody);
                 await LogEmailAsync(userId, "Welcome", email, "Welcome to LuandRi");
             }
             catch (Exception ex)
@@ -413,15 +371,22 @@ LuandRi Laundry Service
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null) return;
 
-                var template = LoadTemplate("password_changed");
-                if (string.IsNullOrEmpty(template)) return;
+                var year = DateTime.Now.Year.ToString();
+                var date = DateTime.Now.ToString("MMMM dd, yyyy hh:mm tt");
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", userName);
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Password Changed</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Your password was successfully changed on {date}.</p>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">If you didn't make this change, please contact us immediately.</p>
+<div style=""border-top:1px solid #e5e7eb;padding-top:24px;"">
+<p style=""margin:0;font-size:14px;color:#6b7280;""><strong style=""color:#374151;"">Security tip:</strong> Use a strong, unique password.</p>
+</div>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(user.Email!, userName, "Password Changed - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Password Changed\n\nHi {userName},\n\nYour password was changed on {date}.\n\nIf you didn't do this, contact us immediately.\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(user.Email!, userName, "Password Changed - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "PasswordChanged", user.Email!, "Password Changed");
             }
             catch (Exception ex)
@@ -434,23 +399,26 @@ LuandRi Laundry Service
         {
             try
             {
-                if (!await CheckUserPreferencesAsync(userId, "payment")) return;
-
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null) return;
 
-                var template = LoadTemplate("payment_pending");
-                if (string.IsNullOrEmpty(template)) return;
+                var userName = $"{user.FirstName} {user.LastName}";
+                var year = DateTime.Now.Year.ToString();
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", $"{user.FirstName} {user.LastName}");
-                variables.Add("requestId", requestId.ToString());
-                variables.Add("amount", amount.ToString("N2"));
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Payment Reminder</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">This is a friendly reminder that you have an outstanding payment.</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;margin:0 0 24px 0;"">
+<p style=""margin:0 0 8px 0;font-size:14px;color:#6b7280;"">Request ID: <strong style=""color:#111827;"">#{requestId}</strong></p>
+<p style=""margin:0;font-size:14px;color:#6b7280;"">Amount Due: <strong style=""color:#111827;"">₱{amount:N2}</strong></p>
+</div>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">Please complete your payment at your earliest convenience.</p>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(user.Email!, $"{user.FirstName} {user.LastName}",
-                    "Payment Reminder - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Payment Reminder\n\nHi {userName},\n\nRequest #{requestId} has outstanding payment of P{amount:N2}.\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(user.Email!, userName, "Payment Reminder - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "PaymentPending", user.Email!, "Payment Reminder");
             }
             catch (Exception ex)
@@ -463,19 +431,22 @@ LuandRi Laundry Service
         {
             try
             {
-                var template = LoadTemplate("admin_message");
-                if (string.IsNullOrEmpty(template)) return;
+                var year = DateTime.Now.Year.ToString();
+                var sentTime = DateTime.Now.ToString("MMMM dd, yyyy hh:mm tt");
 
-                var variables = GetBaseVariables();
-                variables.Add("userName", userName);
-                variables.Add("adminName", adminName);
-                variables.Add("messageContent", messageContent);
-                variables.Add("sentTime", DateTime.Now.ToString("MMMM dd, yyyy hh:mm tt"));
-                variables.Add("currentYear", DateTime.Now.Year.ToString());
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">New Message from {adminName}</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">You have received a new message:</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;margin:0 0 24px 0;"">
+<p style=""margin:0;font-size:16px;color:#111827;"">{messageContent}</p>
+</div>
+<p style=""margin:0 0 32px 0;font-size:14px;color:#6b7280;"">Sent on {sentTime}</p>
+" + GetEmailFooter(year);
 
-                var htmlBody = _templateService.RenderTemplate(template, variables);
-                await _emailService.SendEmailAsync(email, userName, $"New Message from {adminName} - LuandRi", htmlBody);
+                var textBody = $"LuandRi - Message from {adminName}\n\nHi {userName},\n\nMessage:\n{messageContent}\n\nSent: {sentTime}\n\n---\nLuandRi";
 
+                await _emailService.SendEmailAsync(email, userName, $"New Message from {adminName} - LuandRi", htmlBody, textBody);
                 await LogEmailAsync(userId, "AdminMessage", email, $"Message from {adminName}");
             }
             catch (Exception ex)
