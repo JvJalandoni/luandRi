@@ -128,21 +128,6 @@ namespace AdministratorWeb.Controllers
                 _context.RequestActionLogs.Add(acceptLog);
                 await _context.SaveChangesAsync();
 
-                // Send request accepted email
-                try
-                {
-                    await _emailService.SendRequestAcceptedAsync(
-                        request.CustomerId,
-                        requestId,
-                        assignedRobot.Name,
-                        adminUser?.FullName
-                    );
-                }
-                catch
-                {
-                    // Don't fail the request if email fails
-                }
-
                 // **CRITICAL: Start robot line following to target beacon**
                 var lineFollowingStarted = await _robotService.SetLineFollowingAsync(assignedRobot.Name, true);
 
@@ -212,21 +197,6 @@ namespace AdministratorWeb.Controllers
                 };
                 _context.RequestActionLogs.Add(declineLog);
                 await _context.SaveChangesAsync();
-
-                // Send request declined email
-                try
-                {
-                    await _emailService.SendRequestDeclinedAsync(
-                        request.CustomerId,
-                        requestId,
-                        reason ?? "No reason provided",
-                        adminUser?.FullName
-                    );
-                }
-                catch
-                {
-                    // Don't fail the request if email fails
-                }
 
                 _logger.LogInformation("Request {RequestId} declined by user {UserId} with reason: {Reason}",
                     requestId, User.Identity?.Name, reason);
