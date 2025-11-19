@@ -1,26 +1,12 @@
 @using Microsoft.EntityFrameworkCore
 @inject AdministratorWeb.Data.ApplicationDbContext DbContext
-@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 @{
     var companySettings = await DbContext.LaundrySettings.FirstOrDefaultAsync();
     var companyName = companySettings?.CompanyName ?? "Jopart Laundry";
     var companyDescription = companySettings?.CompanyDescription ?? "Advanced robotic room tracking and navigation system. Seamless integration with IoT beacons for precise indoor positioning.";
 
-    // Get APK download URL
-    string apkDownloadUrl = "~/apk/app-release.apk";
-    try
-    {
-        var configPath = System.IO.Path.Combine(HostEnvironment.ContentRootPath, "apk-download-url.txt");
-        if (System.IO.File.Exists(configPath))
-        {
-            var url = System.IO.File.ReadAllText(configPath);
-            if (!string.IsNullOrWhiteSpace(url))
-            {
-                apkDownloadUrl = url;
-            }
-        }
-    }
-    catch { }
+    // Get APK download URL from database
+    var apkDownloadUrl = companySettings?.ApkDownloadUrl ?? "~/apk/app-release.apk";
 }
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">

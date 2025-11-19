@@ -179,6 +179,27 @@
                 </div>
             </div>
 
+            <!-- Mobile App Settings -->
+            <div class="bg-slate-700/30 rounded-2xl p-6 border border-slate-600/50">
+                <div class="flex items-center mb-6">
+                    <div class="p-2 bg-emerald-500/20 rounded-xl mr-3">
+                        <i data-lucide="smartphone" class="h-5 w-5 text-emerald-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white">Mobile App</h3>
+                </div>
+                <div>
+                    <label asp-for="ApkDownloadUrl" class="block text-slate-300 text-sm font-semibold mb-3 flex items-center">
+                        <i data-lucide="download" class="w-4 h-4 mr-2 text-slate-400"></i>
+                        APK Download URL
+                    </label>
+                    <input asp-for="ApkDownloadUrl" type="url" placeholder="https://www.mediafire.com/file/xxx/app-release.apk or https://drive.google.com/..." class="w-full px-4 py-3 bg-slate-600/50 border border-slate-500/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-transparent transition-all duration-200" />
+                    <span asp-validation-for="ApkDownloadUrl" class="text-red-400 text-sm mt-1 flex items-center"></span>
+                    <p class="mt-2 text-xs text-slate-400">
+                        External download link for the customer mobile app (MediaFire, Google Drive, Dropbox, etc.). This link will appear on the login page.
+                    </p>
+                </div>
+            </div>
+
             <!-- Request Management Settings -->
             <div class="bg-slate-700/30 rounded-2xl p-6 border border-slate-600/50">
                 <div class="flex items-center mb-6">
