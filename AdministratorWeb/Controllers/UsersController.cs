@@ -39,7 +39,44 @@ namespace AdministratorWeb.Controllers
                 });
             }
 
+            // Get APK download URL from appsettings or file
+            ViewBag.ApkDownloadUrl = GetApkDownloadUrl();
+
             return View(userViewModels);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> SaveApkDownloadUrl([FromBody] ApkUrlDto dto)
+        {
+            try
+            {
+                var configPath = Path.Combine(_webHostEnvironment.ContentRootPath, "apk-download-url.txt");
+                await System.IO.File.WriteAllTextAsync(configPath, dto.Url ?? string.Empty);
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        private string GetApkDownloadUrl()
+        {
+            try
+            {
+                var configPath = Path.Combine(_webHostEnvironment.ContentRootPath, "apk-download-url.txt");
+                if (System.IO.File.Exists(configPath))
+                {
+                    return System.IO.File.ReadAllText(configPath);
+                }
+            }
+            catch { }
+            return string.Empty;
+        }
+
+        public class ApkUrlDto
+        {
+            public string? Url { get; set; }
         }
 
         public async Task<IActionResult> Create()
