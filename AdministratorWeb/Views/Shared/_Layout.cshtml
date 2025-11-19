@@ -1,9 +1,26 @@
 @using Microsoft.EntityFrameworkCore
 @inject AdministratorWeb.Data.ApplicationDbContext DbContext
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 @{
     var companySettings = await DbContext.LaundrySettings.FirstOrDefaultAsync();
     var companyName = companySettings?.CompanyName ?? "Jopart Laundry";
     var companyDescription = companySettings?.CompanyDescription ?? "Advanced robotic room tracking and navigation system. Seamless integration with IoT beacons for precise indoor positioning.";
+
+    // Get APK download URL
+    string apkDownloadUrl = "~/apk/app-release.apk";
+    try
+    {
+        var configPath = System.IO.Path.Combine(HostEnvironment.ContentRootPath, "apk-download-url.txt");
+        if (System.IO.File.Exists(configPath))
+        {
+            var url = System.IO.File.ReadAllText(configPath);
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                apkDownloadUrl = url;
+            }
+        }
+    }
+    catch { }
 }
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
@@ -468,7 +485,7 @@
                     <div class="mt-6 pt-6 border-t border-slate-200">
                         <div class="text-center">
                             <p class="text-sm font-medium text-slate-700 mb-3">Are you a room customer?</p>
-                            <a href="~/apk/app-release.apk" download class="inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl min-h-[48px] w-full">
+                            <a href="@apkDownloadUrl" target="_blank" class="inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl min-h-[48px] w-full">
                                 <i data-lucide="smartphone" class="w-4 h-4 mr-2"></i>
                                 Download the App Here
                             </a>
