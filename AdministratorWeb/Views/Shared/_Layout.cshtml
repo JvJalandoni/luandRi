@@ -371,20 +371,10 @@
                         <h3 class="text-2xl font-bold text-white mb-2">Are you a room customer?</h3>
                         <p class="text-slate-300 text-sm">Get our mobile app for Android devices</p>
                     </div>
-                    @if (!string.IsNullOrEmpty(apkDownloadUrl) && apkDownloadUrl != "~/apk/app-release.apk")
-                    {
-                        <a href="@apkDownloadUrl" target="_blank" class="inline-flex items-center justify-center px-6 py-4 text-base font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl min-h-[56px] w-full">
-                            <i data-lucide="download" class="w-5 h-5 mr-2"></i>
-                            Download the App Here
-                        </a>
-                    }
-                    else
-                    {
-                        <div class="text-slate-400 text-sm p-4 bg-slate-700/30 rounded-xl">
-                            <i data-lucide="info" class="w-5 h-5 inline mr-2"></i>
-                            App download link not configured yet
-                        </div>
-                    }
+                    <a href="@apkDownloadUrl" target="_blank" class="inline-flex items-center justify-center px-6 py-4 text-base font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl min-h-[56px] w-full">
+                        <i data-lucide="download" class="w-5 h-5 mr-2"></i>
+                        Download the App Here
+                    </a>
                 </div>
             </div>
         </main>
