@@ -15,7 +15,14 @@ class RealtimeRequestsManager {
         this.totalPages = 1;
         this.totalCount = 0;
         this.customerSearchTimeout = null;
+        this.isVisible = true;
+        this.isMobile = this.detectMobile();
         this.init();
+    }
+
+    detectMobile() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+               window.innerWidth < 768;
     }
 
     async init() {
@@ -24,6 +31,18 @@ class RealtimeRequestsManager {
         this.startTimerUpdates();
         this.startTimerSettingsRefresh();
         this.bindEvents();
+        this.setupVisibilityListener();
+    }
+
+    setupVisibilityListener() {
+        // Pause refresh when tab is not visible to save battery on mobile
+        document.addEventListener('visibilitychange', () => {
+            this.isVisible = !document.hidden;
+            if (this.isVisible) {
+                // Resume immediately when tab becomes visible
+                this.refreshRequests();
+            }
+        });
     }
 
     startTimerSettingsRefresh() {
@@ -56,10 +75,18 @@ class RealtimeRequestsManager {
         // Initial load
         this.refreshRequests();
 
-        // Refresh every 3 seconds (optimized from 1s to reduce lag)
+        // Adjust refresh rate based on device type
+        // Mobile: 5 seconds, Desktop: 3 seconds (optimized from 1s to reduce lag)
+        const refreshRate = this.isMobile ? 5000 : 3000;
+
         this.refreshInterval = setInterval(() => {
+            // Skip refresh if tab is not visible
+            if (!this.isVisible) {
+                console.log('Skipping refresh - tab not visible');
+                return;
+            }
             this.refreshRequests();
-        }, 3000);
+        }, refreshRate);
     }
 
     stopAutoRefresh() {
@@ -162,13 +189,18 @@ class RealtimeRequestsManager {
         const avatarContainer = document.getElementById(`avatar-${requestId}`);
         if (!avatarContainer) return;
 
+        // On mobile, skip profile picture loading to reduce network requests
+        if (this.isMobile) {
+            return;
+        }
+
         try {
             const response = await fetch(`/api/users/${customerId}`);
             if (response.ok) {
                 const userData = await response.json();
 
                 if (userData.profilePicturePath) {
-                    avatarContainer.innerHTML = `<img src="${userData.profilePicturePath}" alt="Profile" class="w-full h-full rounded-full object-cover">`;
+                    avatarContainer.innerHTML = `<img src="${userData.profilePicturePath}" alt="Profile" class="w-full h-full rounded-full object-cover" loading="lazy">`;
                 }
                 // If no profile picture, keep the initials that are already there
             }
