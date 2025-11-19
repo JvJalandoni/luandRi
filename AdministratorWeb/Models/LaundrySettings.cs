@@ -116,6 +116,11 @@ namespace AdministratorWeb.Models
         [Range(1, 100, ErrorMessage = "Must be between 1 and 100 requests per day")]
         public int? MaxRequestsPerDay { get; set; } = 10;
 
+        /// <summary>External download URL for customer mobile app (MediaFire, Google Drive, etc.)</summary>
+        [Display(Name = "APK Download URL")]
+        [Url(ErrorMessage = "Please enter a valid URL")]
+        public string? ApkDownloadUrl { get; set; }
+
         /// <summary>Last time these settings were updated</summary>
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
