@@ -133,7 +133,19 @@ else
     app.UseHsts();
 }
 
-app.UseStaticFiles();
+// Configure static files with proper MIME types
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        // Add MIME type for APK files
+        if (ctx.File.Name.EndsWith(".apk", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.ContentType = "application/vnd.android.package-archive";
+            ctx.Context.Response.Headers.Append("Content-Disposition", "attachment");
+        }
+    }
+});
 
 // Enable CORS before routing
 app.UseCors("AllowAll");
