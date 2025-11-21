@@ -11,6 +11,7 @@ namespace AdministratorWeb.Services
     public interface IEmailNotificationService
     {
         Task SendEmailChangeOTPAsync(string userId, string email, string userName, string otpCode);
+        Task SendPasswordResetOTPAsync(string userId, string email, string userName, string otpCode);
         Task SendPaymentCompletedAsync(string userId, int requestId, decimal amount, string paymentMethod, string? adminName = null);
         Task SendRefundIssuedAsync(string userId, int requestId, decimal amount, string reason, string? adminName = null);
         Task SendRequestAcceptedAsync(string userId, int requestId, string robotName, string? adminName = null);
@@ -74,7 +75,7 @@ namespace AdministratorWeb.Services
         {
             try
             {
-                _logger.LogInformation("SendEmailChangeOTPAsync: user={UserId}, email={Email}, OTP={OtpCode}", userId, email, otpCode);
+                _logger.LogInformation("SendEmailChangeOTPAsync: user={UserId}, email={Email}", userId, email);
                 var year = DateTime.Now.Year.ToString();
 
                 var htmlBody = GetEmailHeader() + $@"
@@ -99,6 +100,39 @@ namespace AdministratorWeb.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to send email change OTP to {Email}", email);
+            }
+        }
+
+        public async Task SendPasswordResetOTPAsync(string userId, string email, string userName, string otpCode)
+        {
+            try
+            {
+                _logger.LogInformation("SendPasswordResetOTPAsync: user={UserId}, email={Email}", userId, email);
+                var year = DateTime.Now.Year.ToString();
+
+                var htmlBody = GetEmailHeader() + $@"
+<h1 style=""margin:0 0 24px 0;font-size:24px;font-weight:bold;color:#111827;"">Reset Your Password</h1>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">Hi {userName},</p>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">You requested to reset your password. Use this verification code:</p>
+<div style=""background-color:#f3f4f6;padding:20px;border-radius:8px;text-align:center;margin:0 0 24px 0;"">
+<span style=""font-size:28px;font-weight:bold;letter-spacing:6px;color:#111827;font-family:monospace;"">{otpCode}</span>
+</div>
+<p style=""margin:0 0 24px 0;font-size:16px;color:#374151;"">This code expires in 15 minutes.</p>
+<p style=""margin:0 0 32px 0;font-size:16px;color:#6b7280;"">If you didn't request a password reset, please ignore this email and your password will remain unchanged.</p>
+<div style=""border-top:1px solid #e5e7eb;padding-top:24px;"">
+<p style=""margin:0;font-size:14px;color:#6b7280;""><strong style=""color:#374151;"">Security tip:</strong> Never share this code with anyone. LuandRi will never ask for your verification code.</p>
+</div>
+" + GetEmailFooter(year);
+
+                var textBody = $"LuandRi - Password Reset Code\n\nHi {userName},\n\nYour password reset code is: {otpCode}\n\nThis code expires in 15 minutes.\n\nIf you didn't request this, ignore this email.\n\n---\nLuandRi Laundry Service";
+
+                await _emailService.SendEmailAsync(email, userName, "Password Reset Code - LuandRi", htmlBody, textBody);
+                await LogEmailAsync(userId, "PasswordResetOTP", email, "Password Reset Code");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send password reset OTP to {Email}", email);
+                throw; // Rethrow to handle in controller
             }
         }
 

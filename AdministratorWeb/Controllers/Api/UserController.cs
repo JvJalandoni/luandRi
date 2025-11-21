@@ -406,6 +406,12 @@ namespace AdministratorWeb.Controllers.Api
                 return BadRequest(new { success = false, message = "New email is required" });
             }
 
+            // Validate email format
+            if (!IsValidEmail(request.NewEmail))
+            {
+                return BadRequest(new { success = false, message = "Invalid email format" });
+            }
+
             // Check if new email is different from current
             if (request.NewEmail.Trim().ToLower() == user.Email?.ToLower())
             {
@@ -419,18 +425,41 @@ namespace AdministratorWeb.Controllers.Api
                 return BadRequest(new { success = false, message = "Email already in use by another account" });
             }
 
-            // Generate 6-digit numeric OTP
-            var otpCode = Random.Shared.Next(100000, 999999).ToString();
+            // Rate limiting: Check if user requested OTP recently (within last 60 seconds)
+            var recentOtp = await _context.OTPCodes
+                .Where(o => o.UserId == customerId &&
+                           o.Purpose == "EmailChange" &&
+                           o.CreatedAt > DateTime.UtcNow.AddSeconds(-60))
+                .OrderByDescending(o => o.CreatedAt)
+                .FirstOrDefaultAsync();
 
-            // Delete any existing OTP for this user
-            var existingOtps = _context.OTPCodes
-                .Where(o => o.UserId == customerId && o.Purpose == "EmailChange");
+            if (recentOtp != null)
+            {
+                var secondsRemaining = 60 - (int)(DateTime.UtcNow - recentOtp.CreatedAt).TotalSeconds;
+                Console.WriteLine($"[API] ⚠️ Rate limit: User must wait {secondsRemaining} seconds");
+                return BadRequest(new {
+                    success = false,
+                    message = $"Please wait {secondsRemaining} seconds before requesting another code",
+                    retryAfter = secondsRemaining
+                });
+            }
+
+            // Generate 6-digit numeric OTP using cryptographically secure random
+            var otpCode = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+            Console.WriteLine($"[API] ✅ Generated OTP (ID will be logged, not code itself)");
+
+            // Delete any existing OTP for this user (atomic operation)
+            var existingOtps = await _context.OTPCodes
+                .Where(o => o.UserId == customerId && o.Purpose == "EmailChange")
+                .ToListAsync();
             _context.OTPCodes.RemoveRange(existingOtps);
+            await _context.SaveChangesAsync(); // Ensure deletion completes first
 
             // Store OTP in database
             var otp = new OTPCode
             {
                 UserId = customerId,
+                Email = user.Email!,
                 Code = otpCode,
                 Purpose = "EmailChange",
                 NewEmail = request.NewEmail.Trim(),
@@ -451,11 +480,14 @@ namespace AdministratorWeb.Controllers.Api
                     user.FullName,
                     otpCode
                 );
-                Console.WriteLine($"[API] ✅ OTP email sent to current email {user.Email}");
+                Console.WriteLine($"[API] ✅ OTP email sent to current email (OTP ID: {otp.Id})");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[API] ❌ Failed to send OTP email: {ex.Message}");
+                // Delete OTP if email send failed (no point keeping it)
+                _context.OTPCodes.Remove(otp);
+                await _context.SaveChangesAsync();
                 return BadRequest(new { success = false, message = "Failed to send OTP email. Please try again." });
             }
 
@@ -498,7 +530,7 @@ namespace AdministratorWeb.Controllers.Api
 
             // Find OTP in database - get the most recent one for this user
             var otpCodeInput = request.OtpCode.Trim();
-            Console.WriteLine($"[API] Looking for OTP: '{otpCodeInput}' for user {customerId}");
+            Console.WriteLine($"[API] Looking for OTP for user {customerId}");
 
             // Get the most recent OTP for this user (regardless of status)
             var latestOtp = await _context.OTPCodes
@@ -512,12 +544,12 @@ namespace AdministratorWeb.Controllers.Api
                 return BadRequest(new { success = false, message = "No verification code found. Please request a new one." });
             }
 
-            Console.WriteLine($"[API] Latest OTP in DB: Code='{latestOtp.Code}', IsUsed={latestOtp.IsUsed}, Expires={latestOtp.ExpiresAt} UTC, Now={DateTime.UtcNow} UTC");
+            Console.WriteLine($"[API] Latest OTP in DB: ID={latestOtp.Id}, IsUsed={latestOtp.IsUsed}, Expires={latestOtp.ExpiresAt} UTC, Now={DateTime.UtcNow} UTC");
 
             // Check if codes match
             if (latestOtp.Code != otpCodeInput)
             {
-                Console.WriteLine($"[API] ❌ Code mismatch. DB has '{latestOtp.Code}', user entered '{otpCodeInput}'");
+                Console.WriteLine($"[API] ❌ Invalid OTP code entered for OTP ID {latestOtp.Id}");
                 return BadRequest(new { success = false, message = "Invalid verification code" });
             }
 
@@ -682,6 +714,25 @@ namespace AdministratorWeb.Controllers.Api
             }
 
             return Ok(new { success = true, message = "Password changed successfully" });
+        }
+
+        /// <summary>
+        /// Validates email format
+        /// </summary>
+        private bool IsValidEmail(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return false;
+
+            try
+            {
+                var addr = new System.Net.Mail.MailAddress(email);
+                return addr.Address == email.Trim();
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 

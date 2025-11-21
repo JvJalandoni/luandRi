@@ -99,7 +99,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("PaymentId");
 
-                    b.ToTable("AccountingActionLogs");
+                    b.ToTable("AccountingActionLogs", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.ApplicationUser", b =>
@@ -276,7 +276,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("RoomName");
 
-                    b.ToTable("BluetoothBeacons");
+                    b.ToTable("BluetoothBeacons", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.EmailLog", b =>
@@ -331,7 +331,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("UserId", "SentAt");
 
-                    b.ToTable("EmailLogs");
+                    b.ToTable("EmailLogs", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.EmailPreferences", b =>
@@ -370,7 +370,7 @@ namespace AdministratorWeb.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("EmailPreferences");
+                    b.ToTable("EmailPreferences", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.EmailQueue", b =>
@@ -431,7 +431,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("Status", "CreatedAt");
 
-                    b.ToTable("EmailQueue");
+                    b.ToTable("EmailQueue", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.EmailTemplate", b =>
@@ -481,7 +481,7 @@ namespace AdministratorWeb.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("EmailTemplates");
+                    b.ToTable("EmailTemplates", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.LaundryRequest", b =>
@@ -607,7 +607,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("HandledById");
 
-                    b.ToTable("LaundryRequests");
+                    b.ToTable("LaundryRequests", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.LaundrySettings", b =>
@@ -617,9 +617,6 @@ namespace AdministratorWeb.Migrations
                         .HasColumnType("int");
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ApkDownloadUrl")
-                        .HasColumnType("longtext");
 
                     b.Property<bool>("AutoAcceptRequests")
                         .HasColumnType("tinyint(1)");
@@ -694,7 +691,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("LaundrySettings");
+                    b.ToTable("LaundrySettings", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.Message", b =>
@@ -760,7 +757,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("CustomerId", "SentAt");
 
-                    b.ToTable("Messages");
+                    b.ToTable("Messages", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.OTPCode", b =>
@@ -787,14 +784,6 @@ namespace AdministratorWeb.Migrations
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("NewEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
-
-                    b.Property<string>("Purpose")
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)");
-
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(450)
@@ -818,7 +807,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("UserId", "Email", "Code");
 
-                    b.ToTable("OTPCodes");
+                    b.ToTable("OTPCodes", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.Payment", b =>
@@ -904,7 +893,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("ProcessedByUserId");
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.PaymentAdjustment", b =>
@@ -955,7 +944,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("EffectiveDate");
 
-                    b.ToTable("PaymentAdjustments");
+                    b.ToTable("PaymentAdjustments", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.ProfileUpdateLog", b =>
@@ -1027,7 +1016,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("UserId", "UpdatedAt");
 
-                    b.ToTable("ProfileUpdateLogs");
+                    b.ToTable("ProfileUpdateLogs", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.Receipt", b =>
@@ -1066,7 +1055,7 @@ namespace AdministratorWeb.Migrations
                     b.HasIndex("ReceiptNumber")
                         .IsUnique();
 
-                    b.ToTable("Receipts");
+                    b.ToTable("Receipts", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.RequestActionLog", b =>
@@ -1160,7 +1149,7 @@ namespace AdministratorWeb.Migrations
 
                     b.HasIndex("RequestId", "ActionedAt");
 
-                    b.ToTable("RequestActionLogs");
+                    b.ToTable("RequestActionLogs", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.RobotState", b =>
@@ -1231,7 +1220,7 @@ namespace AdministratorWeb.Migrations
                     b.HasIndex("RobotName")
                         .IsUnique();
 
-                    b.ToTable("RobotStates");
+                    b.ToTable("RobotStates", (string)null);
                 });
 
             modelBuilder.Entity("AdministratorWeb.Models.Room", b =>
@@ -1284,7 +1273,7 @@ namespace AdministratorWeb.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Rooms");
+                    b.ToTable("Rooms", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
