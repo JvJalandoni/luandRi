@@ -126,5 +126,59 @@ export const authService = {
       console.warn('Failed to retrieve token from AsyncStorage:', error);
       return null;
     }
+  },
+
+  /**
+   * Request password reset OTP - Step 1
+   * Sends a 6-digit code to user's email
+   * @param email - User's email address
+   * @returns Promise with success response
+   */
+  async requestPasswordReset(email: string): Promise<{ success: boolean; message: string; expiresAt?: string; retryAfter?: number }> {
+    const response = await axios.post(`${API_BASE_URL}/auth/forgot-password`,
+      { email },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Verify password reset OTP - Step 2
+   * Validates the OTP code and returns a reset token
+   * @param email - User's email address
+   * @param otpCode - 6-digit OTP code from email
+   * @returns Promise with reset token
+   */
+  async verifyResetOTP(email: string, otpCode: string): Promise<{ success: boolean; message: string; resetToken?: string }> {
+    const response = await axios.post(`${API_BASE_URL}/auth/verify-reset-otp`,
+      { email, otpCode },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Reset password - Step 3
+   * Sets new password using verified OTP token
+   * @param email - User's email address
+   * @param resetToken - Token from verify step
+   * @param newPassword - New password
+   * @returns Promise with success response
+   */
+  async resetPassword(email: string, resetToken: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const response = await axios.post(`${API_BASE_URL}/auth/reset-password`,
+      { email, resetToken, newPassword },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000
+      }
+    );
+    return response.data;
   }
 };
