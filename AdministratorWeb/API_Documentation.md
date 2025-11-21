@@ -1,5 +1,14 @@
 # Laundry Service API Documentation
 
+## Infrastructure
+
+### Deployment Architecture
+- **Web Server**: Running on port 23000 (internal)
+- **Reverse Proxy**: Nginx listening on port 80, forwarding to port 23000
+- **SSL/TLS**: Cloudflare handles SSL termination and provides DDoS protection
+- **Security**: Server IP address is hidden behind Cloudflare's CDN
+- **Access**: All external requests go through Cloudflare → Nginx (port 80) → Application (port 23000)
+
 ## Authentication
 
 ### Generate JWT Token
