@@ -155,14 +155,17 @@ public class LineFollowerService : BackgroundService
                 }
                 else if (shouldFollowLine && wasFollowingLine)
                 {
-                    // Already following - but check if we recently stopped due to beacon and are restarting
-                    // If navigation start time is very old or unset, reset it (handles rapid restart case)
-                    var timeSinceStart = (DateTime.UtcNow - _navigationStartTime).TotalSeconds;
-                    if (_navigationStartTime == DateTime.MinValue || timeSinceStart > 60)
+                    // Already following - check if navigation start time was reset (indicates stop/restart)
+                    // If unset, this is a restart after beacon detection - ALWAYS reset grace period
+                    if (_navigationStartTime == DateTime.MinValue)
                     {
                         _logger.LogInformation("Resetting grace period - detected navigation restart after beacon stop");
                         _navigationStartTime = DateTime.UtcNow;
                         _framesProcessed = 0;
+                        _previousError = 0;
+                        _integral = 0;
+                        _lineLostCounter = 0;
+                        _obstacleDetected = false;
                     }
                 }
                 else if (!shouldFollowLine && wasFollowingLine)
