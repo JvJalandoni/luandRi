@@ -148,15 +148,30 @@ public class LineFollowerService : BackgroundService
                     _lineLostCounter = 0;
                     // Reset detection flags to prevent stale state from previous requests
                     _obstacleDetected = false;
-                    // Start beacon detection grace period
+                    // Start beacon detection grace period - ALWAYS reset for new navigation session
                     _navigationStartTime = DateTime.UtcNow;
                     _logger.LogInformation("Beacon detection disabled for first {Seconds} seconds (grace period)", BEACON_DETECTION_GRACE_PERIOD_SECONDS);
                     wasFollowingLine = true;
+                }
+                else if (shouldFollowLine && wasFollowingLine)
+                {
+                    // Already following - but check if we recently stopped due to beacon and are restarting
+                    // If navigation start time is very old or unset, reset it (handles rapid restart case)
+                    var timeSinceStart = (DateTime.UtcNow - _navigationStartTime).TotalSeconds;
+                    if (_navigationStartTime == DateTime.MinValue || timeSinceStart > 60)
+                    {
+                        _logger.LogInformation("Resetting grace period - detected navigation restart after beacon stop");
+                        _navigationStartTime = DateTime.UtcNow;
+                        _framesProcessed = 0;
+                    }
                 }
                 else if (!shouldFollowLine && wasFollowingLine)
                 {
                     _logger.LogInformation("Stopping line following (server command received)");
                     _motorService.Stop();
+                    // Reset navigation start time to ensure grace period works for next delivery
+                    _navigationStartTime = DateTime.MinValue;
+                    _logger.LogInformation("Grace period timer reset for next navigation session");
                     wasFollowingLine = false;
                 }
 
