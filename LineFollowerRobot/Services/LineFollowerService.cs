@@ -138,7 +138,7 @@ public class LineFollowerService : BackgroundService
 
                 if (shouldFollowLine && !wasFollowingLine)
                 {
-                    _logger.LogInformation("Starting line following (server command received)");
+                    _logger.LogInformation("Starting line following (server command received) - NEW NAVIGATION SESSION");
                     _startTime = DateTime.UtcNow;
                     _lastFpsReport = _startTime;
                     _framesProcessed = 0;
@@ -150,7 +150,9 @@ public class LineFollowerService : BackgroundService
                     _obstacleDetected = false;
                     // Start beacon detection grace period - ALWAYS reset for new navigation session
                     _navigationStartTime = DateTime.UtcNow;
-                    _logger.LogInformation("Beacon detection disabled for first {Seconds} seconds (grace period)", BEACON_DETECTION_GRACE_PERIOD_SECONDS);
+                    _logger.LogInformation("✅ GRACE PERIOD STARTED: Beacon detection disabled for {Seconds} seconds (until {EndTime:HH:mm:ss})",
+                        BEACON_DETECTION_GRACE_PERIOD_SECONDS,
+                        _navigationStartTime.AddSeconds(BEACON_DETECTION_GRACE_PERIOD_SECONDS));
                     wasFollowingLine = true;
                 }
                 else if (shouldFollowLine && wasFollowingLine)
@@ -159,13 +161,16 @@ public class LineFollowerService : BackgroundService
                     // If unset, this is a restart after beacon detection - ALWAYS reset grace period
                     if (_navigationStartTime == DateTime.MinValue)
                     {
-                        _logger.LogInformation("Resetting grace period - detected navigation restart after beacon stop");
+                        _logger.LogWarning("⚠️ GRACE PERIOD WAS RESET - Restarting grace period for new navigation segment");
                         _navigationStartTime = DateTime.UtcNow;
                         _framesProcessed = 0;
                         _previousError = 0;
                         _integral = 0;
                         _lineLostCounter = 0;
                         _obstacleDetected = false;
+                        _logger.LogInformation("✅ GRACE PERIOD RESTARTED: Beacon detection disabled for {Seconds} seconds (until {EndTime:HH:mm:ss})",
+                            BEACON_DETECTION_GRACE_PERIOD_SECONDS,
+                            _navigationStartTime.AddSeconds(BEACON_DETECTION_GRACE_PERIOD_SECONDS));
                     }
                 }
                 else if (!shouldFollowLine && wasFollowingLine)
@@ -184,6 +189,22 @@ public class LineFollowerService : BackgroundService
                     var timeSinceNavigationStart = (DateTime.UtcNow - _navigationStartTime).TotalSeconds;
                     var isGracePeriodOver = timeSinceNavigationStart >= BEACON_DETECTION_GRACE_PERIOD_SECONDS;
 
+                    // Log grace period status every 50 frames
+                    if (_framesProcessed % 50 == 0)
+                    {
+                        if (isGracePeriodOver)
+                        {
+                            _logger.LogInformation("✅ Grace period OVER - Beacon detection ACTIVE ({Elapsed:F1}s elapsed)",
+                                timeSinceNavigationStart);
+                        }
+                        else
+                        {
+                            var remainingTime = BEACON_DETECTION_GRACE_PERIOD_SECONDS - timeSinceNavigationStart;
+                            _logger.LogInformation("⏳ Grace period ACTIVE - Beacon detection DISABLED (remaining: {Remaining:F1}s / {Total}s)",
+                                remainingTime, BEACON_DETECTION_GRACE_PERIOD_SECONDS);
+                        }
+                    }
+
                     if (isGracePeriodOver)
                     {
                         var serverCommService = _serviceProvider.GetService<RobotServerCommunicationService>();
@@ -201,13 +222,23 @@ public class LineFollowerService : BackgroundService
                                 if (targetBeaconConfig != null && detectedBeacon.Rssi >= targetBeaconConfig.RssiThreshold)
                                 {
                                     _logger.LogWarning(
-                                        "TARGET REACHED! Beacon {BeaconMac} RSSI: {Rssi} dBm >= {Threshold} dBm - STOPPING IMMEDIATELY",
-                                        detectedBeacon.MacAddress, detectedBeacon.Rssi, targetBeaconConfig.RssiThreshold);
+                                        "🎯 TARGET REACHED! Beacon {BeaconMac} RSSI: {Rssi} dBm >= {Threshold} dBm - STOPPING IMMEDIATELY (elapsed: {Elapsed:F1}s)",
+                                        detectedBeacon.MacAddress, detectedBeacon.Rssi, targetBeaconConfig.RssiThreshold, timeSinceNavigationStart);
 
                                     await _motorService.StopLineFollowingAsync();
                                     continue; // Skip camera processing this iteration
                                 }
                             }
+                        }
+                    }
+                    else
+                    {
+                        // Grace period still active - skip beacon checking entirely
+                        // Log occasionally to show grace period is working
+                        if (_framesProcessed % 100 == 0)
+                        {
+                            _logger.LogDebug("⏳ Skipping beacon detection during grace period ({Elapsed:F1}s / {Total}s)",
+                                timeSinceNavigationStart, BEACON_DETECTION_GRACE_PERIOD_SECONDS);
                         }
                     }
 
