@@ -931,31 +931,35 @@ namespace AdministratorWeb.Controllers.Api
         {
             try
             {
+                // Get ANY active request for this robot (not just Accepted status!)
                 var activeRequest = await _context.LaundryRequests
                     .FirstOrDefaultAsync(r => r.AssignedRobotName == robotName &&
-                                              r.Status == RequestStatus.Accepted);
+                                              (r.Status == RequestStatus.Accepted ||
+                                               r.Status == RequestStatus.ArrivedAtRoom ||
+                                               r.Status == RequestStatus.LaundryLoaded ||
+                                               r.Status == RequestStatus.FinishedWashingGoingToRoom ||
+                                               r.Status == RequestStatus.FinishedWashingGoingToBase ||
+                                               r.Status == RequestStatus.Cancelled));
 
                 if (activeRequest == null)
                     return ("Available", false);
 
-                // Check if robot is at user's room by checking beacon proximity
-                if (!string.IsNullOrEmpty(activeRequest.AssignedBeaconMacAddress))
+                // Return status based on request status
+                string statusString = activeRequest.Status switch
                 {
-                    var robot = await _robotService.GetRobotAsync(robotName);
-                    if (robot?.DetectedBeacons != null)
-                    {
-                        var targetBeacon = robot.DetectedBeacons.Values.FirstOrDefault(b =>
-                            string.Equals(b.MacAddress, activeRequest.AssignedBeaconMacAddress,
-                                StringComparison.OrdinalIgnoreCase));
+                    RequestStatus.Accepted => $"Going to {await GetRoomNameForBeacon(activeRequest.AssignedBeaconMacAddress)}",
+                    RequestStatus.ArrivedAtRoom => $"At {await GetRoomNameForBeacon(activeRequest.AssignedBeaconMacAddress)}",
+                    RequestStatus.LaundryLoaded => "Laundry Loaded - Going to Wash",
+                    RequestStatus.FinishedWashingGoingToRoom => $"Washing Done - Going to {await GetRoomNameForBeacon(activeRequest.AssignedBeaconMacAddress)}",
+                    RequestStatus.FinishedWashingGoingToBase => "Washing Done - Going to Base",
+                    RequestStatus.Cancelled => "Cancelled - Returning to Base",
+                    _ => "Unknown Status"
+                };
 
-                        if (targetBeacon != null && targetBeacon.CurrentRssi >= -35)
-                        {
-                            return ($"At {targetBeacon.RoomName}", true);
-                        }
-                    }
-                }
+                // Check if robot is at user's room
+                bool atUserRoom = activeRequest.Status == RequestStatus.ArrivedAtRoom;
 
-                return ($"Going to {await GetRoomNameForBeacon(activeRequest.AssignedBeaconMacAddress)}", false);
+                return (statusString, atUserRoom);
             }
             catch
             {
