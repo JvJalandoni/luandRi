@@ -56,10 +56,10 @@
                                         </span>
                                     </div>
                                     <button type="button"
-                                            class="delete-message-btn opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-white/10 rounded-lg"
+                                            class="delete-message-btn p-1 hover:bg-white/10 rounded-lg transition-colors duration-200"
                                             data-message-id="@message.Id"
                                             title="Delete message">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 hover:text-red-300"></i>
                                     </button>
                                 </div>
 
@@ -299,10 +299,10 @@
                                     <span class="text-xs opacity-70">${timeStr}</span>
                                 </div>
                                 <button type="button"
-                                        class="delete-message-btn opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-white/10 rounded-lg"
+                                        class="delete-message-btn p-1 hover:bg-white/10 rounded-lg transition-colors duration-200"
                                         data-message-id="${message.id}"
                                         title="Delete message">
-                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 hover:text-red-300"></i>
                                 </button>
                             </div>
                             ${imageHtml}
