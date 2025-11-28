@@ -56,18 +56,7 @@ public class LineFollowerService : BackgroundService
     private int _beaconDetectionCount = 0;
 
     // Beacon detection grace period (prevents premature detection when starting near beacon)
-    private DateTime _navigationStartTime = DateTime.MinValue;
     private const int BEACON_DETECTION_GRACE_PERIOD_SECONDS = 10; // Wait 10 seconds before checking beacons
-
-    /// <summary>
-    /// Resets the grace period timer - called when starting line following from server command
-    /// This ensures EVERY navigation start gets a fresh 10-second grace period
-    /// </summary>
-    public void ResetGracePeriod()
-    {
-        _navigationStartTime = DateTime.UtcNow;
-        _logger.LogWarning("🔥 GRACE PERIOD RESET BY SERVER COMMAND - Beacon detection disabled for {Seconds} seconds", BEACON_DETECTION_GRACE_PERIOD_SECONDS);
-    }
 
     /// <summary>
     /// Initializes the line follower service with all required dependencies
@@ -169,21 +158,21 @@ public class LineFollowerService : BackgroundService
 
                 if (shouldFollowLine)
                 {
-                    // Check beacon RSSI synchronously BEFORE camera processing (with grace period to prevent premature detection)
-                    var timeSinceNavigationStart = (DateTime.UtcNow - _navigationStartTime).TotalSeconds;
-                    var isGracePeriodOver = timeSinceNavigationStart >= BEACON_DETECTION_GRACE_PERIOD_SECONDS;
+                    // Check beacon RSSI synchronously BEFORE camera processing (with grace period based on LastEnable)
+                    var timeSinceLastEnable = (DateTime.UtcNow - _motorService.LastEnable).TotalSeconds;
+                    var isGracePeriodOver = timeSinceLastEnable >= BEACON_DETECTION_GRACE_PERIOD_SECONDS;
 
                     // Log grace period status every 50 frames
                     if (_framesProcessed % 50 == 0)
                     {
                         if (isGracePeriodOver)
                         {
-                            _logger.LogInformation("✅ Grace period OVER - Beacon detection ACTIVE ({Elapsed:F1}s elapsed)",
-                                timeSinceNavigationStart);
+                            _logger.LogInformation("✅ Grace period OVER - Beacon detection ACTIVE ({Elapsed:F1}s since LastEnable)",
+                                timeSinceLastEnable);
                         }
                         else
                         {
-                            var remainingTime = BEACON_DETECTION_GRACE_PERIOD_SECONDS - timeSinceNavigationStart;
+                            var remainingTime = BEACON_DETECTION_GRACE_PERIOD_SECONDS - timeSinceLastEnable;
                             _logger.LogInformation("⏳ Grace period ACTIVE - Beacon detection DISABLED (remaining: {Remaining:F1}s / {Total}s)",
                                 remainingTime, BEACON_DETECTION_GRACE_PERIOD_SECONDS);
                         }
@@ -206,8 +195,8 @@ public class LineFollowerService : BackgroundService
                                 if (targetBeaconConfig != null && detectedBeacon.Rssi >= targetBeaconConfig.RssiThreshold)
                                 {
                                     _logger.LogWarning(
-                                        "🎯 TARGET REACHED! Beacon {BeaconMac} RSSI: {Rssi} dBm >= {Threshold} dBm - STOPPING IMMEDIATELY (elapsed: {Elapsed:F1}s)",
-                                        detectedBeacon.MacAddress, detectedBeacon.Rssi, targetBeaconConfig.RssiThreshold, timeSinceNavigationStart);
+                                        "🎯 TARGET REACHED! Beacon {BeaconMac} RSSI: {Rssi} dBm >= {Threshold} dBm - STOPPING (elapsed: {Elapsed:F1}s since LastEnable)",
+                                        detectedBeacon.MacAddress, detectedBeacon.Rssi, targetBeaconConfig.RssiThreshold, timeSinceLastEnable);
 
                                     await _motorService.StopLineFollowingAsync();
                                     continue; // Skip camera processing this iteration
@@ -221,8 +210,8 @@ public class LineFollowerService : BackgroundService
                         // Log occasionally to show grace period is working
                         if (_framesProcessed % 100 == 0)
                         {
-                            _logger.LogDebug("⏳ Skipping beacon detection during grace period ({Elapsed:F1}s / {Total}s)",
-                                timeSinceNavigationStart, BEACON_DETECTION_GRACE_PERIOD_SECONDS);
+                            _logger.LogDebug("⏳ Skipping beacon detection during grace period ({Elapsed:F1}s / {Total}s since LastEnable)",
+                                timeSinceLastEnable, BEACON_DETECTION_GRACE_PERIOD_SECONDS);
                         }
                     }
 
