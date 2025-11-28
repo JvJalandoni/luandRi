@@ -60,6 +60,16 @@ public class LineFollowerService : BackgroundService
     private const int BEACON_DETECTION_GRACE_PERIOD_SECONDS = 10; // Wait 10 seconds before checking beacons
 
     /// <summary>
+    /// Resets the grace period timer - called when starting line following from server command
+    /// This ensures EVERY navigation start gets a fresh 10-second grace period
+    /// </summary>
+    public void ResetGracePeriod()
+    {
+        _navigationStartTime = DateTime.UtcNow;
+        _logger.LogWarning("🔥 GRACE PERIOD RESET BY SERVER COMMAND - Beacon detection disabled for {Seconds} seconds", BEACON_DETECTION_GRACE_PERIOD_SECONDS);
+    }
+
+    /// <summary>
     /// Initializes the line follower service with all required dependencies
     /// Sets up PID parameters, movement thresholds, and sensor event handlers
     /// </summary>
@@ -138,7 +148,7 @@ public class LineFollowerService : BackgroundService
 
                 if (shouldFollowLine && !wasFollowingLine)
                 {
-                    _logger.LogInformation("Starting line following (server command received) - NEW NAVIGATION SESSION");
+                    _logger.LogInformation("Starting line following (server command received)");
                     _startTime = DateTime.UtcNow;
                     _lastFpsReport = _startTime;
                     _framesProcessed = 0;
@@ -148,38 +158,12 @@ public class LineFollowerService : BackgroundService
                     _lineLostCounter = 0;
                     // Reset detection flags to prevent stale state from previous requests
                     _obstacleDetected = false;
-                    // Start beacon detection grace period - ALWAYS reset for new navigation session
-                    _navigationStartTime = DateTime.UtcNow;
-                    _logger.LogInformation("✅ GRACE PERIOD STARTED: Beacon detection disabled for {Seconds} seconds (until {EndTime:HH:mm:ss})",
-                        BEACON_DETECTION_GRACE_PERIOD_SECONDS,
-                        _navigationStartTime.AddSeconds(BEACON_DETECTION_GRACE_PERIOD_SECONDS));
                     wasFollowingLine = true;
-                }
-                else if (shouldFollowLine && wasFollowingLine)
-                {
-                    // Already following - check if navigation start time was reset (indicates stop/restart)
-                    // If unset, this is a restart after beacon detection - ALWAYS reset grace period
-                    if (_navigationStartTime == DateTime.MinValue)
-                    {
-                        _logger.LogWarning("⚠️ GRACE PERIOD WAS RESET - Restarting grace period for new navigation segment");
-                        _navigationStartTime = DateTime.UtcNow;
-                        _framesProcessed = 0;
-                        _previousError = 0;
-                        _integral = 0;
-                        _lineLostCounter = 0;
-                        _obstacleDetected = false;
-                        _logger.LogInformation("✅ GRACE PERIOD RESTARTED: Beacon detection disabled for {Seconds} seconds (until {EndTime:HH:mm:ss})",
-                            BEACON_DETECTION_GRACE_PERIOD_SECONDS,
-                            _navigationStartTime.AddSeconds(BEACON_DETECTION_GRACE_PERIOD_SECONDS));
-                    }
                 }
                 else if (!shouldFollowLine && wasFollowingLine)
                 {
                     _logger.LogInformation("Stopping line following (server command received)");
                     _motorService.Stop();
-                    // Reset navigation start time to ensure grace period works for next delivery
-                    _navigationStartTime = DateTime.MinValue;
-                    _logger.LogInformation("Grace period timer reset for next navigation session");
                     wasFollowingLine = false;
                 }
 
@@ -224,10 +208,6 @@ public class LineFollowerService : BackgroundService
                                     _logger.LogWarning(
                                         "🎯 TARGET REACHED! Beacon {BeaconMac} RSSI: {Rssi} dBm >= {Threshold} dBm - STOPPING IMMEDIATELY (elapsed: {Elapsed:F1}s)",
                                         detectedBeacon.MacAddress, detectedBeacon.Rssi, targetBeaconConfig.RssiThreshold, timeSinceNavigationStart);
-
-                                    // Reset navigation start time so grace period restarts on next navigation
-                                    _navigationStartTime = DateTime.MinValue;
-                                    _logger.LogInformation("🔄 Grace period timer reset - will restart on next navigation command");
 
                                     await _motorService.StopLineFollowingAsync();
                                     continue; // Skip camera processing this iteration
