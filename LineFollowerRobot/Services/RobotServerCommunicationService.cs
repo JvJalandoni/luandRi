@@ -31,6 +31,9 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
     private decimal? _maxWeightKg = null;
     private readonly object _maxWeightLock = new();
 
+    // Track last robot status to detect status changes
+    private string? _lastRobotStatus = null;
+
     public RobotServerCommunicationService(
         ILogger<RobotServerCommunicationService> logger,
         BluetoothBeaconService beaconService,
@@ -353,18 +356,42 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
                 }
             }
 
+            // Check if RobotStatus changed - if yes, reset grace period
+            bool statusChanged = false;
+            if (serverResponse.RobotStatus != _lastRobotStatus && !string.IsNullOrEmpty(serverResponse.RobotStatus))
+            {
+                statusChanged = true;
+                _logger.LogWarning("🔄 ROBOT STATUS CHANGED: '{OldStatus}' -> '{NewStatus}'",
+                    _lastRobotStatus ?? "null", serverResponse.RobotStatus);
+                _lastRobotStatus = serverResponse.RobotStatus;
+            }
+
             // Handle line following command from server
             if (motorService != null)
             {
                 if (serverResponse.IsLineFollowing)
                 {
-                    _logger.LogInformation("Server instructed robot to start line following");
-                    await motorService.StartLineFollowingAsync(); // This sets LastEnable for grace period
+                    // Reset LastEnable if status changed OR if not currently following
+                    bool needsLastEnableReset = statusChanged || !motorService.IsLineFollowingActive;
+
+                    if (needsLastEnableReset)
+                    {
+                        _logger.LogWarning("🔥 RESETTING GRACE PERIOD - StatusChanged: {StatusChanged}, WasActive: {WasActive}",
+                            statusChanged, motorService.IsLineFollowingActive);
+                        await motorService.StartLineFollowingAsync(); // This sets LastEnable for grace period
+                    }
+                    else
+                    {
+                        // Already following and status hasn't changed - don't reset grace period
+                        _logger.LogDebug("Line following continues - grace period NOT reset");
+                    }
                 }
                 else
                 {
                     _logger.LogInformation("Server instructed robot to stop line following");
                     await motorService.StopLineFollowingAsync();
+                    // Reset last status so next time robot starts, it resets grace period
+                    _lastRobotStatus = null;
                 }
             }
 
