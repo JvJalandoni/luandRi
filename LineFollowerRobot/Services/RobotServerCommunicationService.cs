@@ -359,6 +359,14 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
                 if (serverResponse.IsLineFollowing)
                 {
                     _logger.LogInformation("Server instructed robot to start line following");
+
+                    // CRITICAL: Reset grace period EVERY time we receive start command from server
+                    var lineFollowerService = _serviceProvider.GetService<LineFollowerService>();
+                    if (lineFollowerService != null)
+                    {
+                        lineFollowerService.ResetGracePeriod();
+                    }
+
                     await motorService.StartLineFollowingAsync();
                 }
                 else
@@ -369,10 +377,10 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
             }
 
             // Update line color from server
-            var lineFollowerService = _serviceProvider.GetService<LineFollowerService>();
-            if (lineFollowerService != null)
+            var lineFollowerService2 = _serviceProvider.GetService<LineFollowerService>();
+            if (lineFollowerService2 != null)
             {
-                lineFollowerService.LineColor = serverResponse.FollowColor;
+                lineFollowerService2.LineColor = serverResponse.FollowColor;
                 if (serverResponse.FollowColor != null && serverResponse.FollowColor.Length >= 3)
                 {
                     _logger.LogInformation("Updated line color to RGB({R},{G},{B})",
