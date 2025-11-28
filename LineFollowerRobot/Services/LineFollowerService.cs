@@ -225,6 +225,10 @@ public class LineFollowerService : BackgroundService
                                         "🎯 TARGET REACHED! Beacon {BeaconMac} RSSI: {Rssi} dBm >= {Threshold} dBm - STOPPING IMMEDIATELY (elapsed: {Elapsed:F1}s)",
                                         detectedBeacon.MacAddress, detectedBeacon.Rssi, targetBeaconConfig.RssiThreshold, timeSinceNavigationStart);
 
+                                    // Reset navigation start time so grace period restarts on next navigation
+                                    _navigationStartTime = DateTime.MinValue;
+                                    _logger.LogInformation("🔄 Grace period timer reset - will restart on next navigation command");
+
                                     await _motorService.StopLineFollowingAsync();
                                     continue; // Skip camera processing this iteration
                                 }
