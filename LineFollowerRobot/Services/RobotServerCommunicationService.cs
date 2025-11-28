@@ -142,8 +142,26 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
             // Get detected beacons from beacon service
             var detectedBeacons = GetDetectedBeacons();
 
-            // Check if robot is near any navigation target
-            bool isInTarget = CheckIfAtNavigationTarget(detectedBeacons);
+            // Check grace period - if active, NEVER report IsInTarget to prevent premature arrival
+            var motorService = _serviceProvider.GetService<LineFollowerMotorService>();
+            bool isGracePeriodActive = false;
+            if (motorService != null)
+            {
+                var timeSinceLastEnable = (DateTime.UtcNow - motorService.LastEnable).TotalSeconds;
+                isGracePeriodActive = motorService.IsLineFollowingActive && timeSinceLastEnable < 10.0;
+
+                if (isGracePeriodActive && timeSinceLastEnable >= 0)
+                {
+                    _logger.LogInformation("⏳ GRACE PERIOD ACTIVE - Suppressing IsInTarget (elapsed: {Elapsed:F1}s / 10s)", timeSinceLastEnable);
+                }
+            }
+
+            // Check if robot is near any navigation target (ONLY if grace period is over)
+            bool isInTarget = false;
+            if (!isGracePeriodActive)
+            {
+                isInTarget = CheckIfAtNavigationTarget(detectedBeacons);
+            }
 
             // Get current weight reading
             double currentWeightKg = GetCurrentWeight();
