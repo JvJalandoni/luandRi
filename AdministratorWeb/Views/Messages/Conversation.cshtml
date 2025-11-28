@@ -41,18 +41,26 @@
                     var isAdmin = message.SenderType == "Admin";
                     var alignClass = isAdmin ? "justify-end" : "justify-start";
 
-                    <div class="flex @alignClass message-item animate-slide-up">
-                        <div class="max-w-[70%] @(isAdmin ? "order-2" : "order-1")">
+                    <div class="flex @alignClass message-item animate-slide-up group" data-message-id="@message.Id">
+                        <div class="max-w-[70%] @(isAdmin ? "order-2" : "order-1") relative">
                             <!-- Message Bubble -->
                             <div class="@(isAdmin ? "bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-2xl rounded-br-md" : "bg-slate-700/50 backdrop-blur-sm text-white rounded-2xl rounded-bl-md border border-slate-600/50") px-4 py-3 shadow-lg">
-                                <!-- Header -->
-                                <div class="flex items-center gap-2 mb-2 opacity-90">
-                                    <i data-lucide="@(isAdmin ? "shield" : "user")" class="w-3 h-3"></i>
-                                    <span class="text-xs font-semibold">@message.SenderName</span>
-                                    <span class="text-xs opacity-70">•</span>
-                                    <span class="text-xs opacity-70">
-                                        @message.SentAt.ToString("MMM dd, hh:mm tt")
-                                    </span>
+                                <!-- Header with Delete Button -->
+                                <div class="flex items-center justify-between gap-2 mb-2">
+                                    <div class="flex items-center gap-2 opacity-90">
+                                        <i data-lucide="@(isAdmin ? "shield" : "user")" class="w-3 h-3"></i>
+                                        <span class="text-xs font-semibold">@message.SenderName</span>
+                                        <span class="text-xs opacity-70">•</span>
+                                        <span class="text-xs opacity-70">
+                                            @message.SentAt.ToString("MMM dd, hh:mm tt")
+                                        </span>
+                                    </div>
+                                    <button type="button"
+                                            class="delete-message-btn opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-white/10 rounded-lg"
+                                            data-message-id="@message.Id"
+                                            title="Delete message">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
                                 </div>
 
                                 <!-- Image -->
@@ -280,14 +288,22 @@
             const iconType = isAdmin ? 'shield' : 'user';
 
             const html = `
-                <div class="flex ${alignClass} message-item animate-slide-up">
-                    <div class="max-w-[70%] ${isAdmin ? 'order-2' : 'order-1'}">
+                <div class="flex ${alignClass} message-item animate-slide-up group" data-message-id="${message.id}">
+                    <div class="max-w-[70%] ${isAdmin ? 'order-2' : 'order-1'} relative">
                         <div class="${bubbleClass} px-4 py-3 shadow-lg">
-                            <div class="flex items-center gap-2 mb-2 opacity-90">
-                                <i data-lucide="${iconType}" class="w-3 h-3"></i>
-                                <span class="text-xs font-semibold">${escapeHtml(message.senderName)}</span>
-                                <span class="text-xs opacity-70">•</span>
-                                <span class="text-xs opacity-70">${timeStr}</span>
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <div class="flex items-center gap-2 opacity-90">
+                                    <i data-lucide="${iconType}" class="w-3 h-3"></i>
+                                    <span class="text-xs font-semibold">${escapeHtml(message.senderName)}</span>
+                                    <span class="text-xs opacity-70">•</span>
+                                    <span class="text-xs opacity-70">${timeStr}</span>
+                                </div>
+                                <button type="button"
+                                        class="delete-message-btn opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-white/10 rounded-lg"
+                                        data-message-id="${message.id}"
+                                        title="Delete message">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                </button>
                             </div>
                             ${imageHtml}
                             ${contentHtml}
@@ -298,12 +314,68 @@
 
             document.getElementById('messages').insertAdjacentHTML('beforeend', html);
             lucide.createIcons();
+            attachDeleteHandlers();
         }
 
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // Delete message handler
+        async function deleteMessage(messageId) {
+            if (!confirm('Are you sure you want to delete this message? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/Messages/DeleteMessage', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `messageId=${messageId}`
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Remove message from UI with animation
+                    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+                    if (messageElement) {
+                        messageElement.style.opacity = '0';
+                        messageElement.style.transform = 'scale(0.9)';
+                        messageElement.style.transition = 'all 0.3s ease-out';
+                        setTimeout(() => {
+                            messageElement.remove();
+                        }, 300);
+                    }
+                } else {
+                    alert('Failed to delete message: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error deleting message:', error);
+                alert('Failed to delete message: ' + error.message);
+            }
+        }
+
+        // Attach delete handlers to all delete buttons
+        function attachDeleteHandlers() {
+            document.querySelectorAll('.delete-message-btn').forEach(button => {
+                // Remove existing event listener to prevent duplicates
+                button.replaceWith(button.cloneNode(true));
+            });
+
+            // Re-attach event listeners
+            document.querySelectorAll('.delete-message-btn').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const messageId = this.getAttribute('data-message-id');
+                    deleteMessage(messageId);
+                });
+            });
         }
 
         // Poll for new messages every 3 seconds
@@ -336,9 +408,10 @@
             }
         });
 
-        // Initialize Lucide icons
+        // Initialize Lucide icons and delete handlers
         document.addEventListener('DOMContentLoaded', function() {
             lucide.createIcons();
+            attachDeleteHandlers();
         });
     </script>
 }
