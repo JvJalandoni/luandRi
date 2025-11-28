@@ -359,15 +359,7 @@ public class RobotServerCommunicationService : BackgroundService, IDisposable
                 if (serverResponse.IsLineFollowing)
                 {
                     _logger.LogInformation("Server instructed robot to start line following");
-
-                    // CRITICAL: Reset grace period EVERY time we receive start command from server
-                    var lineFollowerService = _serviceProvider.GetService<LineFollowerService>();
-                    if (lineFollowerService != null)
-                    {
-                        lineFollowerService.ResetGracePeriod();
-                    }
-
-                    await motorService.StartLineFollowingAsync();
+                    await motorService.StartLineFollowingAsync(); // This sets LastEnable for grace period
                 }
                 else
                 {

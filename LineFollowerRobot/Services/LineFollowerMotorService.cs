@@ -59,6 +59,12 @@ public class LineFollowerMotorService : IDisposable
     private volatile bool _isLineFollowingActive = false;
 
     /// <summary>
+    /// Timestamp when line following was last enabled
+    /// Used for grace period - robot won't stop at beacons for 10 seconds after this time
+    /// </summary>
+    public DateTime LastEnable { get; private set; } = DateTime.MinValue;
+
+    /// <summary>
     /// Indicates whether line following mode is currently active
     /// Controlled by server commands via data exchange
     /// </summary>
@@ -522,6 +528,8 @@ public class LineFollowerMotorService : IDisposable
         // _logger.LogInformation("📍 Starting line following mode");
 
         _isLineFollowingActive = true;
+        LastEnable = DateTime.UtcNow; // Set grace period start time
+        _logger.LogInformation("🔥 Line following ENABLED - LastEnable set to {Time:HH:mm:ss} (grace period: 10s)", LastEnable);
 
         await Task.CompletedTask;
     }
