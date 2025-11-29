@@ -871,19 +871,52 @@ namespace AdministratorWeb.Controllers.Api
                     }
                     else if (activeRequest.Status == RequestStatus.FinishedWashingGoingToBase)
                     {
-                        // Robot has returned to base with clean laundry - waiting for admin to complete
-                        activeRequest.Status = RequestStatus.FinishedWashingAtBase;
+                        // Robot returning to base with clean laundry - verify it's ACTUALLY at BASE beacon (not still at user room)
+                        bool isAtBaseBeacon = false;
 
-                        var robot = await _robotService.GetRobotAsync(robotName);
-                        if (robot != null)
+                        // Check if robot is detecting a Base beacon with sufficient RSSI
+                        if (detectedBeacons != null && detectedBeacons.Any())
                         {
-                            robot.CurrentTask = "Returned to base with clean laundry - awaiting admin completion";
-                            robot.Status = RobotStatus.Available;
+                            foreach (var detectedBeacon in detectedBeacons)
+                            {
+                                var baseBeacon = activeBeacons.FirstOrDefault(b =>
+                                    b.IsBase &&
+                                    string.Equals(b.MacAddress, detectedBeacon.MacAddress, StringComparison.OrdinalIgnoreCase));
+
+                                if (baseBeacon != null && detectedBeacon.Rssi >= baseBeacon.RssiThreshold)
+                                {
+                                    isAtBaseBeacon = true;
+                                    _logger.LogInformation("Robot {RobotName} CONFIRMED at BASE beacon {BeaconMac} with RSSI {Rssi} >= {Threshold}",
+                                        robotName, baseBeacon.MacAddress, detectedBeacon.Rssi, baseBeacon.RssiThreshold);
+                                    break;
+                                }
+                            }
                         }
 
-                        _logger.LogInformation(
-                            "Robot {RobotName} has returned to base with clean laundry (Request #{RequestId}) - awaiting admin completion",
-                            robotName, activeRequest.Id);
+                        if (isAtBaseBeacon)
+                        {
+                            // Robot has ACTUALLY returned to base with clean laundry - waiting for admin to complete
+                            activeRequest.Status = RequestStatus.FinishedWashingAtBase;
+
+                            var robot = await _robotService.GetRobotAsync(robotName);
+                            if (robot != null)
+                            {
+                                robot.CurrentTask = "Returned to base with clean laundry - awaiting admin completion";
+                                robot.Status = RobotStatus.Available;
+                            }
+
+                            _logger.LogInformation(
+                                "Robot {RobotName} has returned to base with clean laundry (Request #{RequestId}) - awaiting admin completion",
+                                robotName, activeRequest.Id);
+                        }
+                        else
+                        {
+                            // Robot has FinishedWashingGoingToBase status but NOT at base yet (still traveling)
+                            // This is NORMAL right after customer confirms unloading - robot is still near user room beacon
+                            _logger.LogInformation(
+                                "Robot {RobotName} has FinishedWashingGoingToBase status but not at base yet (IsInTarget detected non-base beacon) - robot still traveling",
+                                robotName);
+                        }
                     }
                     else if (activeRequest.Status == RequestStatus.Cancelled)
                     {
