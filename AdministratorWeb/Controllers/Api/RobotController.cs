@@ -938,6 +938,7 @@ namespace AdministratorWeb.Controllers.Api
                                                r.Status == RequestStatus.ArrivedAtRoom ||
                                                r.Status == RequestStatus.LaundryLoaded ||
                                                r.Status == RequestStatus.FinishedWashingGoingToRoom ||
+                                               r.Status == RequestStatus.FinishedWashingArrivedAtRoom ||
                                                r.Status == RequestStatus.FinishedWashingGoingToBase ||
                                                r.Status == RequestStatus.Cancelled));
 
@@ -951,13 +952,14 @@ namespace AdministratorWeb.Controllers.Api
                     RequestStatus.ArrivedAtRoom => $"At {await GetRoomNameForBeacon(activeRequest.AssignedBeaconMacAddress)}",
                     RequestStatus.LaundryLoaded => "Laundry Loaded - Going to Wash",
                     RequestStatus.FinishedWashingGoingToRoom => $"Washing Done - Going to {await GetRoomNameForBeacon(activeRequest.AssignedBeaconMacAddress)}",
+                    RequestStatus.FinishedWashingArrivedAtRoom => $"Washing Done - At {await GetRoomNameForBeacon(activeRequest.AssignedBeaconMacAddress)}",
                     RequestStatus.FinishedWashingGoingToBase => "Washing Done - Going to Base",
                     RequestStatus.Cancelled => "Cancelled - Returning to Base",
                     _ => "Unknown Status"
                 };
 
                 // Check if robot is at user's room
-                bool atUserRoom = activeRequest.Status == RequestStatus.ArrivedAtRoom;
+                bool atUserRoom = activeRequest.Status == RequestStatus.ArrivedAtRoom || activeRequest.Status == RequestStatus.FinishedWashingArrivedAtRoom;
 
                 return (statusString, atUserRoom);
             }
