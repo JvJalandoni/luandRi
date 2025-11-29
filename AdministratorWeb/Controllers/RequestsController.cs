@@ -414,6 +414,21 @@ namespace AdministratorWeb.Controllers
 
                 await _context.SaveChangesAsync();
 
+                // **CRITICAL: Start robot line following to reset grace period**
+                if (!string.IsNullOrEmpty(request.AssignedRobotName))
+                {
+                    var lineFollowingStarted = await _robotService.SetLineFollowingAsync(request.AssignedRobotName, true);
+
+                    if (!lineFollowingStarted)
+                    {
+                        _logger.LogWarning("Failed to start line following for robot {RobotName} on delivery", request.AssignedRobotName);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Line following started for robot {RobotName} - grace period reset", request.AssignedRobotName);
+                    }
+                }
+
                 // Log the action
                 var deliveryLog = new RequestActionLog
                 {
