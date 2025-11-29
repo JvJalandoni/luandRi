@@ -409,9 +409,9 @@ namespace AdministratorWeb.Controllers.Api
         [HttpPost("{requestId}/confirm-unloaded")]
         public async Task<IActionResult> ConfirmLaundryUnloaded(int requestId)
         {
-            // Get customer ID from JWT token claims  
+            // Get customer ID from JWT token claims
             var customerId = User.FindFirst("CustomerId")?.Value;
-            
+
             if (string.IsNullOrEmpty(customerId))
             {
                 return Unauthorized("Customer ID not found in token");
@@ -431,8 +431,23 @@ namespace AdministratorWeb.Controllers.Api
             }
 
             request.Status = RequestStatus.FinishedWashingGoingToBase;
-            
+
             await _context.SaveChangesAsync();
+
+            // **CRITICAL: Start robot line following to reset grace period**
+            if (!string.IsNullOrEmpty(request.AssignedRobotName))
+            {
+                var lineFollowingStarted = await _robotService.SetLineFollowingAsync(request.AssignedRobotName, true);
+
+                if (!lineFollowingStarted)
+                {
+                    _logger.LogWarning("Failed to start line following for robot {RobotName} after customer confirmed unloading", request.AssignedRobotName);
+                }
+                else
+                {
+                    _logger.LogInformation("Line following started for robot {RobotName} returning to base - grace period reset", request.AssignedRobotName);
+                }
+            }
 
             return Ok(new
             {
