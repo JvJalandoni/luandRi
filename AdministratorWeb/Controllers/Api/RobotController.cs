@@ -170,26 +170,35 @@ namespace AdministratorWeb.Controllers.Api
                 // Get robot follow color from in-memory storage
                 var followColor = await GetRobotFollowColor(name);
 
+                // Get active request to check if robot should be moving or stopped
+                var activeRequestForMovement = await _context.LaundryRequests
+                    .FirstOrDefaultAsync(r => r.AssignedRobotName == name &&
+                                              (r.Status == RequestStatus.Accepted ||
+                                               r.Status == RequestStatus.LaundryLoaded ||
+                                               r.Status == RequestStatus.FinishedWashingGoingToRoom ||
+                                               r.Status == RequestStatus.FinishedWashingGoingToBase ||
+                                               r.Status == RequestStatus.Cancelled));
+
                 // Check if we have a cancelled request that needs to return to base
                 var cancelledRequest = await _context.LaundryRequests
                     .FirstOrDefaultAsync(r => r.AssignedRobotName == name && r.Status == RequestStatus.Cancelled);
 
-                // FIXED: Only set navigation targets if robot has NOT reached target
-                // UNLESS there's a cancelled request (robot needs to navigate to Base)
-                if (!request.IsInTarget || cancelledRequest != null)
+                // Set navigation targets if robot SHOULD BE MOVING (based on status, not IsInTarget)
+                // This handles cases where robot just started moving but IsInTarget is still true
+                if (activeRequestForMovement != null && !string.IsNullOrWhiteSpace(targetRoomName))
                 {
-                    if (!string.IsNullOrWhiteSpace(targetRoomName)) // if we have a target
-                        await SetNavigationTargetForRoomBeacons(activeBeacons, targetRoomName);
+                    await SetNavigationTargetForRoomBeacons(activeBeacons, targetRoomName);
+                    _logger.LogInformation("Robot {RobotName} should be moving to {TargetRoom} - setting navigation targets", name, targetRoomName);
                 }
                 else
                 {
-                    // Clear all navigation targets since robot has reached destination
+                    // Clear all navigation targets - robot should be stopped or no target
                     foreach (var beacon in activeBeacons)
                     {
                         beacon.IsNavigationTarget = false;
                     }
 
-                    _logger.LogInformation("Robot {RobotName} reached target - clearing all navigation targets", name);
+                    _logger.LogInformation("Robot {RobotName} should be stopped - clearing navigation targets", name);
                 }
 
                 // Determine if robot should be line following
