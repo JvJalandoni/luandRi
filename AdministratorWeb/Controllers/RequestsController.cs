@@ -473,7 +473,7 @@ namespace AdministratorWeb.Controllers
         }
 
         /// <summary>
-        /// Marks robot as ready after unloading dirty laundry, triggers next queued request processing
+        /// FIX: Start the specified Pending request directly - forget about old requests!
         /// </summary>
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -487,84 +487,66 @@ namespace AdministratorWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // Verify request is at ReturnedToBase or Washing status
-            if (request.Status != RequestStatus.ReturnedToBase &&
-                request.Status != RequestStatus.Washing)
+            // FIX: Accept PENDING requests directly!
+            if (request.Status != RequestStatus.Pending)
             {
-                TempData["Error"] = "Request must be at ReturnedToBase or Washing status.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            // Get the robot
-            var robot = await _robotService.GetRobotAsync(request.AssignedRobotName);
-            if (robot == null)
-            {
-                TempData["Error"] = "Robot not found.";
+                TempData["Error"] = "Request must be Pending to start.";
                 return RedirectToAction(nameof(Index));
             }
 
             try
             {
-                // Process next pending request in queue (if any)
-                var settings = await _context.LaundrySettings.FirstOrDefaultAsync();
-                if (settings?.AutoAcceptRequests == true)
+                // Get an available robot (or first robot if all busy)
+                var allRobots = await _robotService.GetAllRobotsAsync();
+                var availableRobot = allRobots.FirstOrDefault(r => r.IsActive && !r.IsOffline && r.Status == RobotStatus.Available);
+
+                // If no available robot, use first active robot (override)
+                var robot = availableRobot ?? allRobots.FirstOrDefault(r => r.IsActive && !r.IsOffline);
+
+                if (robot == null)
                 {
-                    var nextRequest = await _context.LaundryRequests
-                        .Where(r => r.Status == RequestStatus.Pending)
-                        .OrderBy(r => r.RequestedAt)
-                        .FirstOrDefaultAsync();
+                    TempData["Error"] = "No robots available.";
+                    return RedirectToAction(nameof(Index));
+                }
 
-                    if (nextRequest != null)
+                // Start THIS request directly!
+                request.Status = RequestStatus.Accepted;
+                request.AcceptedAt = DateTime.UtcNow;
+                request.AssignedRobotName = robot.Name;
+
+                await _context.SaveChangesAsync();
+
+                // Start robot line following to customer room
+                var lineFollowingStarted = await _robotService.SetLineFollowingAsync(robot.Name, true);
+
+                if (lineFollowingStarted)
+                {
+                    request.Status = RequestStatus.RobotEnRoute;
+
+                    // Update in-memory robot status
+                    robot.CurrentTask = $"Navigating to room {request.RoomName} for request #{request.Id}";
+                    robot.Status = RobotStatus.Busy;
+
+                    // FIX: Also update robot status in DATABASE
+                    var robotState = await _context.RobotStates
+                        .FirstOrDefaultAsync(r => r.RobotName == robot.Name);
+                    if (robotState != null)
                     {
-                        // Auto-accept next request
-                        nextRequest.Status = RequestStatus.Accepted;
-                        nextRequest.AcceptedAt = DateTime.UtcNow;
-                        nextRequest.AssignedRobotName = robot.Name;
-
-                        await _context.SaveChangesAsync();
-
-                        // Start robot line following to customer room
-                        var lineFollowingStarted = await _robotService.SetLineFollowingAsync(robot.Name, true);
-
-                        if (lineFollowingStarted)
-                        {
-                            nextRequest.Status = RequestStatus.RobotEnRoute;
-
-                            // Update in-memory robot status
-                            robot.CurrentTask = $"Navigating to room {nextRequest.RoomName} for request #{nextRequest.Id}";
-                            robot.Status = RobotStatus.Busy;
-
-                            // FIX: Also update robot status in DATABASE
-                            var robotState = await _context.RobotStates
-                                .FirstOrDefaultAsync(r => r.RobotName == robot.Name);
-                            if (robotState != null)
-                            {
-                                robotState.Status = RobotStatus.Busy;
-                                robotState.CurrentTask = $"Navigating to room {nextRequest.RoomName} for request #{nextRequest.Id}";
-                                robotState.LastUpdated = DateTime.UtcNow;
-                            }
-
-                            await _context.SaveChangesAsync();
-
-                            _logger.LogInformation("Robot marked ready, processing next request {RequestId}", nextRequest.Id);
-                            TempData["Success"] = $"Robot ready! Processing next request #{nextRequest.Id} for {nextRequest.CustomerName}.";
-                        }
-                        else
-                        {
-                            TempData["Error"] = "Failed to start robot navigation to next request.";
-                            _logger.LogError("Failed to start line following for next request {RequestId}", nextRequest.Id);
-                        }
+                        robotState.Status = RobotStatus.Busy;
+                        robotState.CurrentTask = $"Navigating to room {request.RoomName} for request #{request.Id}";
+                        robotState.LastUpdated = DateTime.UtcNow;
                     }
-                    else
-                    {
-                        TempData["Success"] = "Robot marked as ready. No pending requests in queue.";
-                        _logger.LogInformation("Robot marked ready but no pending requests to process");
-                    }
+
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation("Starting request {RequestId} for customer {CustomerName}, robot going to {RoomName}",
+                        request.Id, request.CustomerName, request.RoomName);
+                    TempData["Success"] = $"Robot dispatched! Processing request #{request.Id} for {request.CustomerName} - Room {request.RoomName}.";
                 }
                 else
                 {
-                    TempData["Success"] = "Robot marked as ready. Auto-accept is disabled.";
-                    _logger.LogInformation("Robot marked ready but auto-accept is disabled");
+                    TempData["Error"] = "Failed to start robot navigation.";
+                    _logger.LogError("Failed to start line following for request {RequestId}", request.Id);
                 }
             }
             catch (Exception ex)

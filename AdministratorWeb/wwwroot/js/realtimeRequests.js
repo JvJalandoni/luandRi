@@ -432,19 +432,44 @@ class RealtimeRequestsManager {
         // If auto-accept is ON and status is Pending, show queued message with priority
         else if (request.status === 'Pending' && window.autoAcceptEnabled) {
             const priority = this.calculatePriority(request);
-            buttons += `
-                <div class="inline-flex items-center px-4 py-2 bg-yellow-100 border border-yellow-300 text-yellow-800 text-sm font-semibold rounded-lg">
-                    <div class="flex items-center space-x-2">
-                        <div class="flex items-center bg-yellow-200 border border-yellow-400 rounded-md px-2 py-1">
-                            <span class="text-xs font-bold text-yellow-900">#${priority}</span>
+
+            // Show "Robot Ready" button ONLY for Priority #1 AND robots are available (not all busy)
+            if (priority === 1 && !window.allRobotsBusy) {
+                buttons += `
+                    <div class="inline-flex items-center space-x-2">
+                        <div class="inline-flex items-center px-3 py-2 bg-yellow-100 border border-yellow-300 text-yellow-800 text-xs font-semibold rounded-lg">
+                            <div class="flex items-center bg-yellow-200 border border-yellow-400 rounded-md px-1.5 py-0.5 mr-2">
+                                <span class="text-xs font-bold text-yellow-900">#${priority}</span>
+                            </div>
+                            <span>Next</span>
                         </div>
-                        <div class="flex items-center">
-                            <i data-lucide="clock" class="w-4 h-4 mr-2 flex-shrink-0"></i>
-                            <span>⏳ Queue Priority ${priority}</span>
+                        <form action="/Requests/MarkRobotReady" method="post" class="inline" onsubmit="this.querySelector('button').style.display='none'; return true;">
+                            <input type="hidden" name="id" value="${request.id}"/>
+                            <input type="hidden" name="__RequestVerificationToken" value="${document.querySelector('input[name="__RequestVerificationToken"]')?.value}"/>
+                            <button type="submit"
+                                    class="inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 text-sm font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap">
+                                <i data-lucide="play-circle" class="w-4 h-4 mr-2 flex-shrink-0"></i>
+                                <span>Is Robot Ready?</span>
+                            </button>
+                        </form>
+                    </div>
+                `;
+            } else {
+                // For other priorities, just show the queue badge
+                buttons += `
+                    <div class="inline-flex items-center px-4 py-2 bg-yellow-100 border border-yellow-300 text-yellow-800 text-sm font-semibold rounded-lg">
+                        <div class="flex items-center space-x-2">
+                            <div class="flex items-center bg-yellow-200 border border-yellow-400 rounded-md px-2 py-1">
+                                <span class="text-xs font-bold text-yellow-900">#${priority}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <i data-lucide="clock" class="w-4 h-4 mr-2 flex-shrink-0"></i>
+                                <span>⏳ Queue Priority ${priority}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
         }
 
         if (request.status === 'Washing') {
@@ -457,39 +482,9 @@ class RealtimeRequestsManager {
             `;
         }
 
-        // Ready button for ReturnedToBase and Washing - admin confirms robot ready for next request
-        // Only show if auto-accept is ON (otherwise admin manually accepts requests anyway)
-        if ((request.status === 'ReturnedToBase' || request.status === 'Washing') && window.autoAcceptEnabled) {
-            buttons += `
-                <form action="/Requests/MarkRobotReady" method="post" class="inline" onsubmit="this.querySelector('button').style.display='none'; return true;">
-                    <input type="hidden" name="id" value="${request.id}"/>
-                    <input type="hidden" name="__RequestVerificationToken" value="${document.querySelector('input[name="__RequestVerificationToken"]')?.value}"/>
-                    <button type="submit"
-                            class="inline-flex items-center px-4 py-2 bg-brand-600 text-white hover:bg-brand-700 text-sm font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap">
-                        <i data-lucide="play-circle" class="w-4 h-4 mr-2 flex-shrink-0"></i>
-                        <span>Is Robot Ready?</span>
-                    </button>
-                </form>
-            `;
-        }
-
-        // FIX BUG #3: Show Ready button for Pending requests when auto-accept is ON but all robots are busy
-        // This allows manual override when robots become available
-        if (request.status === 'Pending' && window.autoAcceptEnabled && window.allRobotsBusy) {
-            buttons += `
-                <div class="inline-flex items-center">
-                    <form action="/Requests/AcceptRequest" method="post" class="inline" onsubmit="this.querySelector('button').style.display='none'; return true;">
-                        <input type="hidden" name="requestId" value="${request.id}"/>
-                        <input type="hidden" name="__RequestVerificationToken" value="${document.querySelector('input[name="__RequestVerificationToken"]')?.value}"/>
-                        <button type="submit"
-                                class="inline-flex items-center px-4 py-2 bg-yellow-600 text-white hover:bg-yellow-700 text-sm font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap">
-                            <i data-lucide="alert-circle" class="w-4 h-4 mr-2 flex-shrink-0"></i>
-                            <span>Accept (All Robots Busy)</span>
-                        </button>
-                    </form>
-                </div>
-            `;
-        }
+        // REMOVED: "Is Robot Ready?" button from old request
+        // REMOVED: "Accept (All Robots Busy)" button
+        // Now all queue processing is done via "Start This Request" button on Priority #1
 
         if (request.status === 'FinishedWashingReadyToDeliver') {
             buttons += `

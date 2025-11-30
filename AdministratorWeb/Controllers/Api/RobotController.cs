@@ -446,21 +446,22 @@ namespace AdministratorWeb.Controllers.Api
         {
             try
             {
-                // FIX: Case-insensitive robot name matching + Add missing statuses
+                // FIX: Get ACTIVE movement request (exclude Washing/ReturnedToBase - robot waiting, not moving)
+                // Priority: Get requests where robot SHOULD BE MOVING first
                 var activeRequest = await _context.LaundryRequests
-                    .FirstOrDefaultAsync(r => r.AssignedRobotName.ToLower() == robotName.ToLower() &&
-                                              (r.Status == RequestStatus.Accepted || // go to customer room
-                                               r.Status == RequestStatus.RobotEnRoute || // FIX: robot is traveling
-                                               r.Status == RequestStatus.ArrivedAtRoom || // FIX: robot at customer
-                                               r.Status == RequestStatus.InProgress || // FIX: loading laundry
-                                               r.Status == RequestStatus.LaundryLoaded || // go to base
-                                               r.Status == RequestStatus.ReturnedToBase || // FIX: at base
-                                               r.Status == RequestStatus.Washing || // FIX: laundry washing
-                                               r.Status == RequestStatus.FinishedWashingReadyToDeliver || // FIX: ready
-                                               r.Status == RequestStatus.FinishedWashingGoingToRoom || // go to customer
-                                               r.Status == RequestStatus.FinishedWashingArrivedAtRoom || // FIX: at customer
-                                               r.Status == RequestStatus.FinishedWashingGoingToBase || // go to base
-                                               r.Status == RequestStatus.Cancelled)); // cancelled - return to base
+                    .Where(r => r.AssignedRobotName.ToLower() == robotName.ToLower() &&
+                                (r.Status == RequestStatus.Accepted || // go to customer room
+                                 r.Status == RequestStatus.RobotEnRoute || // robot is traveling
+                                 r.Status == RequestStatus.ArrivedAtRoom || // robot at customer
+                                 r.Status == RequestStatus.InProgress || // loading laundry
+                                 r.Status == RequestStatus.LaundryLoaded || // go to base
+                                 r.Status == RequestStatus.FinishedWashingReadyToDeliver || // ready to deliver
+                                 r.Status == RequestStatus.FinishedWashingGoingToRoom || // go to customer
+                                 r.Status == RequestStatus.FinishedWashingArrivedAtRoom || // at customer
+                                 r.Status == RequestStatus.FinishedWashingGoingToBase || // go to base
+                                 r.Status == RequestStatus.Cancelled)) // cancelled - return to base
+                    .OrderByDescending(r => r.AcceptedAt) // Get MOST RECENT accepted request (new one wins over old Washing)
+                    .FirstOrDefaultAsync();
 
                 if (activeRequest == null)
                 {
