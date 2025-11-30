@@ -520,11 +520,17 @@ namespace AdministratorWeb.Controllers.Api
         {
             await Task.Run(() =>
             {
+                // Normalize target room name (trim whitespace)
+                var normalizedTargetRoom = targetRoomName?.Trim();
+
                 foreach (var beacon in beacons)
                 {
                     // Set IsNavigationTarget to true for ALL beacons in the target room
-                    beacon.IsNavigationTarget = !string.IsNullOrEmpty(targetRoomName) &&
-                                                string.Equals(beacon.RoomName, targetRoomName,
+                    // Normalize both room names by trimming whitespace before comparison
+                    var normalizedBeaconRoom = beacon.RoomName?.Trim();
+                    beacon.IsNavigationTarget = !string.IsNullOrWhiteSpace(normalizedTargetRoom) &&
+                                                !string.IsNullOrWhiteSpace(normalizedBeaconRoom) &&
+                                                string.Equals(normalizedBeaconRoom, normalizedTargetRoom,
                                                     StringComparison.OrdinalIgnoreCase);
                 }
 
