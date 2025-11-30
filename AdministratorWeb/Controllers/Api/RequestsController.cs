@@ -706,12 +706,17 @@ namespace AdministratorWeb.Controllers.Api
                     return;
                 }
 
-                // Check if robot is already busy with another request
+                // Check if robot is busy with any active operation (pickup, delivery, travel)
                 var anyActiveRequest = await _context.LaundryRequests
                     .AnyAsync(r => r.Status == RequestStatus.Accepted ||
-                                   r.Status == RequestStatus.LaundryLoaded ||
+                                   r.Status == RequestStatus.InProgress ||
+                                   r.Status == RequestStatus.RobotEnRoute ||
                                    r.Status == RequestStatus.ArrivedAtRoom ||
+                                   r.Status == RequestStatus.LaundryLoaded ||
+                                   r.Status == RequestStatus.ReturnedToBase ||
+                                   r.Status == RequestStatus.FinishedWashingReadyToDeliver ||
                                    r.Status == RequestStatus.FinishedWashingGoingToRoom ||
+                                   r.Status == RequestStatus.FinishedWashingArrivedAtRoom ||
                                    r.Status == RequestStatus.FinishedWashingGoingToBase);
 
                 if (anyActiveRequest)
@@ -834,6 +839,162 @@ namespace AdministratorWeb.Controllers.Api
             {
                 _logger.LogError(ex, "Error getting available robots count");
                 return StatusCode(500, new { error = "Failed to get robot availability" });
+            }
+
+        }
+        /// <summary>
+        /// Gets queue status for a specific request including position and estimated wait time
+        /// Shows the customer where they are in line and approximately how long they'll wait
+        /// Includes ALL robot operation phases: pickup, delivery, and robot travel
+        /// </summary>
+        /// <param name="requestId">ID of the request to check</param>
+        /// <returns>Queue position, total queue length, estimated wait time, and whether request is in queue</returns>
+        [HttpGet("{requestId}/queue-status")]
+        public async Task<IActionResult> GetQueueStatus(int requestId)
+        {
+            try
+            {
+                var request = await _context.LaundryRequests
+                    .FirstOrDefaultAsync(r => r.Id == requestId);
+
+                if (request == null)
+                {
+                    return NotFound(new { message = "Request not found" });
+                }
+
+                // Only pending requests are in the queue
+                if (request.Status != RequestStatus.Pending)
+                {
+                    return Ok(new
+                    {
+                        isInQueue = false,
+                        queuePosition = 0,
+                        totalInQueue = 0,
+                        estimatedWaitTimeMinutes = 0,
+                        status = request.Status.ToString(),
+                        message = "Request is not in queue"
+                    });
+                }
+
+                // Get all pending requests ordered by request time (FIFO)
+                var queuedRequests = await _context.LaundryRequests
+                    .Where(r => r.Status == RequestStatus.Pending)
+                    .OrderBy(r => r.RequestedAt)
+                    .Select(r => new { r.Id, r.RequestedAt })
+                    .ToListAsync();
+
+                // Find position in queue (1-indexed)
+                var queuePosition = queuedRequests.FindIndex(r => r.Id == requestId) + 1;
+                var totalInQueue = queuedRequests.Count;
+
+                // Calculate estimated wait time
+                // Each complete cycle (pickup + delivery) takes ~15 minutes
+                const int averageRequestDurationMinutes = 15;
+                var estimatedWaitTimeMinutes = (queuePosition - 1) * averageRequestDurationMinutes;
+
+                // Check if robot is currently busy with any active operation
+                // Includes: pickup phase, delivery phase, and all robot travel
+                var hasActiveRequest = await _context.LaundryRequests
+                    .AnyAsync(r => r.Status == RequestStatus.Accepted ||
+                                   r.Status == RequestStatus.InProgress ||
+                                   r.Status == RequestStatus.RobotEnRoute ||
+                                   r.Status == RequestStatus.ArrivedAtRoom ||
+                                   r.Status == RequestStatus.LaundryLoaded ||
+                                   r.Status == RequestStatus.ReturnedToBase ||
+                                   r.Status == RequestStatus.FinishedWashingReadyToDeliver ||
+                                   r.Status == RequestStatus.FinishedWashingGoingToRoom ||
+                                   r.Status == RequestStatus.FinishedWashingArrivedAtRoom ||
+                                   r.Status == RequestStatus.FinishedWashingGoingToBase);
+
+                if (hasActiveRequest)
+                {
+                    // Add time for the currently processing request
+                    estimatedWaitTimeMinutes += averageRequestDurationMinutes;
+                }
+
+                return Ok(new
+                {
+                    isInQueue = true,
+                    queuePosition = queuePosition,
+                    totalInQueue = totalInQueue,
+                    estimatedWaitTimeMinutes = estimatedWaitTimeMinutes,
+                    status = request.Status.ToString(),
+                    requestedAt = request.RequestedAt,
+                    message = queuePosition == 1
+                        ? "You're next in line!"
+                        : $"You are number {queuePosition} in the queue"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting queue status for request {RequestId}", requestId);
+                return StatusCode(500, new { error = "Failed to get queue status" });
+            }
+        }
+
+        /// <summary>
+        /// Gets overall queue statistics showing total number of pending requests
+        /// Useful for dashboard and admin monitoring
+        /// </summary>
+        /// <returns>Total number of requests in queue and list of queue positions</returns>
+        [HttpGet("queue/status")]
+        public async Task<IActionResult> GetOverallQueueStatus()
+        {
+            try
+            {
+                var queuedRequests = await _context.LaundryRequests
+                    .Where(r => r.Status == RequestStatus.Pending)
+                    .OrderBy(r => r.RequestedAt)
+                    .Select(r => new
+                    {
+                        r.Id,
+                        r.CustomerName,
+                        r.RequestedAt,
+                        r.RoomName
+                    })
+                    .ToListAsync();
+
+                // Check if robot is currently busy with any active operation
+                var hasActiveRequest = await _context.LaundryRequests
+                    .AnyAsync(r => r.Status == RequestStatus.Accepted ||
+                                   r.Status == RequestStatus.InProgress ||
+                                   r.Status == RequestStatus.RobotEnRoute ||
+                                   r.Status == RequestStatus.ArrivedAtRoom ||
+                                   r.Status == RequestStatus.LaundryLoaded ||
+                                   r.Status == RequestStatus.ReturnedToBase ||
+                                   r.Status == RequestStatus.FinishedWashingReadyToDeliver ||
+                                   r.Status == RequestStatus.FinishedWashingGoingToRoom ||
+                                   r.Status == RequestStatus.FinishedWashingArrivedAtRoom ||
+                                   r.Status == RequestStatus.FinishedWashingGoingToBase);
+
+                const int averageRequestDurationMinutes = 15;
+                var estimatedTotalWaitTime = queuedRequests.Count * averageRequestDurationMinutes;
+
+                if (hasActiveRequest)
+                {
+                    estimatedTotalWaitTime += averageRequestDurationMinutes;
+                }
+
+                return Ok(new
+                {
+                    totalInQueue = queuedRequests.Count,
+                    hasActiveRequest = hasActiveRequest,
+                    estimatedTotalWaitTimeMinutes = estimatedTotalWaitTime,
+                    queue = queuedRequests.Select((req, index) => new
+                    {
+                        position = index + 1,
+                        req.Id,
+                        req.CustomerName,
+                        req.RequestedAt,
+                        req.RoomName,
+                        estimatedWaitMinutes = (index + (hasActiveRequest ? 1 : 0)) * averageRequestDurationMinutes
+                    })
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting overall queue status");
+                return StatusCode(500, new { error = "Failed to get queue status" });
             }
         }
     }

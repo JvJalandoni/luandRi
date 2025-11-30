@@ -249,6 +249,8 @@ export const laundryService = {
    * Helps user know if they can make a request immediately
    * @returns Promise with robot fleet statistics
    */
+/**   * Gets queue status for a specific request   * Shows queue position, total queue length, and estimated wait time   * @param requestId - ID of the request to check   * @returns Promise with queue status details   */  async getQueueStatus(requestId: number): Promise<{    isInQueue: boolean;    queuePosition: number;    totalInQueue: number;    estimatedWaitTimeMinutes: number;    status: string;    requestedAt: string;    message: string;  }> {    const response = await apiGet(`/requests/${requestId}/queue-status`);    return response.data;  },
+
   async getAvailableRobots(): Promise<{
     totalRobots: number;
     availableRobots: number;

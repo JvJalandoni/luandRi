@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useCustomAlert } from '../components/CustomAlert';
 import { ThemedText } from '../components/ThemedText';
+import { QueueStatus } from '../components/QueueStatus';
 import { ThemedView } from '../components/ThemedView';
 import { useAuth } from '../contexts/AuthContext';
 import { useThemeColor } from '../hooks/useThemeColor';
@@ -529,6 +530,9 @@ export default function ActiveRequestScreen() {
                                                         </View>
                                                 </View>
                                         </View>
+
+						{/* Queue Status - Shows position and wait time when request is pending */}
+						<QueueStatus requestId={activeRequest.id} />
 
                                         {/* Admin Manual Request Badge */}
                                         {activeRequest.instructions?.includes('ADMIN_MANUAL') && (
