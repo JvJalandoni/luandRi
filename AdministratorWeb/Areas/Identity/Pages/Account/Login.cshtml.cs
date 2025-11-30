@@ -77,18 +77,23 @@ namespace AdministratorWeb.Areas.Identity.Pages.Account
                 {
                     // CHECK IF USER IS ADMINISTRATOR
                     var user = await _userManager.FindByEmailAsync(Input.Email);
-                    if (user != null)
+                    if (user == null)
                     {
-                        var isAdmin = await _userManager.IsInRoleAsync(user, "Administrator");
-                        
-                        if (!isAdmin)
-                        {
-                            // User is not an admin - sign them out immediately
-                            await _signInManager.SignOutAsync();
-                            _logger.LogWarning("Non-administrator user {Email} attempted to login to admin panel.", Input.Email);
-                            ModelState.AddModelError(string.Empty, "Access denied. This portal is for administrators only.");
-                            return Page();
-                        }
+                        await _signInManager.SignOutAsync();
+                        _logger.LogError("User {Email} logged in but user record not found.", Input.Email);
+                        ModelState.AddModelError(string.Empty, "An error occurred. Please contact support.");
+                        return Page();
+                    }
+
+                    var isAdmin = await _userManager.IsInRoleAsync(user, "Administrator");
+                    
+                    if (!isAdmin)
+                    {
+                        // User is not an admin - sign them out immediately
+                        await _signInManager.SignOutAsync();
+                        _logger.LogWarning("Non-administrator user {Email} attempted to login to admin panel.", Input.Email);
+                        ModelState.AddModelError(string.Empty, "Access denied. This portal is for administrators only.");
+                        return Page();
                     }
 
                     _logger.LogInformation("Administrator {Email} logged in.", Input.Email);
