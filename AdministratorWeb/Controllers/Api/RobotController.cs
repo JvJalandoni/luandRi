@@ -190,6 +190,15 @@ namespace AdministratorWeb.Controllers.Api
                     await SetNavigationTargetForRoomBeacons(activeBeacons, targetRoomName);
                     _logger.LogInformation("Robot {RobotName} should be moving to {TargetRoom} - setting navigation targets", name, targetRoomName);
                 }
+                else if (cancelledRequest != null)
+                {
+                    // Set Base beacons as navigation targets
+                    foreach (var beacon in activeBeacons)
+                    {
+                        beacon.IsNavigationTarget = beacon.IsBase;
+                    }
+                    _logger.LogInformation("Robot {RobotName} cancelled - Base beacons set", name);
+                }
                 else
                 {
                     // Clear all navigation targets - robot should be stopped or no target
