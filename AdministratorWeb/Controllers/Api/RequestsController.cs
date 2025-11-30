@@ -128,8 +128,9 @@ namespace AdministratorWeb.Controllers.Api
                 try
                 {
                     // Lock on LaundrySettings to serialize concurrent request creation
+                    // MySQL: Use SELECT FOR UPDATE to acquire exclusive lock
                     var settings = await _context.LaundrySettings
-                        .FromSqlRaw("SELECT * FROM LaundrySettings WITH (UPDLOCK, HOLDLOCK)")
+                        .FromSqlRaw("SELECT * FROM LaundrySettings FOR UPDATE")
                         .FirstOrDefaultAsync();
 
                     var autoAccept = settings?.AutoAcceptRequests ?? false;
