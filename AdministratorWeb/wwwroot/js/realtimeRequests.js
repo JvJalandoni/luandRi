@@ -398,7 +398,8 @@ class RealtimeRequestsManager {
     getActionButtons(request) {
         let buttons = '';
 
-        if (request.status === 'Pending') {
+        // Only show Accept/Decline buttons if status is Pending AND auto-accept is disabled
+        if (request.status === 'Pending' && !window.autoAcceptEnabled) {
             buttons += `
                 <button onclick="showAcceptModal(${request.id})"
                         class="inline-flex items-center px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap">
@@ -412,6 +413,15 @@ class RealtimeRequestsManager {
                 </button>
             `;
         }
+        // If auto-accept is ON and status is Pending, show queued message
+        else if (request.status === 'Pending' && window.autoAcceptEnabled) {
+            buttons += `
+                <div class="inline-flex items-center px-4 py-2 bg-yellow-100 border border-yellow-300 text-yellow-800 text-sm font-semibold rounded-lg">
+                    <i data-lucide="clock" class="w-4 h-4 mr-2 flex-shrink-0"></i>
+                    <span>⏳ Queued - Auto-processing</span>
+                </div>
+            `;
+        }
 
         if (request.status === 'Washing') {
             buttons += `
@@ -420,6 +430,24 @@ class RealtimeRequestsManager {
                     <i data-lucide="package-check" class="w-4 h-4 mr-2 flex-shrink-0"></i>
                     <span>Mark for Pickup/Delivery</span>
                 </button>
+            `;
+        }
+
+        // Ready button for ReturnedToBase and Washing - admin confirms robot ready for next request
+        if (request.status === 'ReturnedToBase' || request.status === 'Washing') {
+            buttons += `
+                <div class="inline-flex flex-col items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p class="text-sm text-gray-700 font-medium">Is robot ready for next auto-accept?</p>
+                    <form action="/Requests/MarkRobotReady" method="post" class="inline">
+                        <input type="hidden" name="id" value="${request.id}"/>
+                        <input type="hidden" name="__RequestVerificationToken" value="${document.querySelector('input[name="__RequestVerificationToken"]')?.value}"/>
+                        <button type="submit"
+                                class="inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 text-sm font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap">
+                            <i data-lucide="check-circle-2" class="w-4 h-4 mr-2 flex-shrink-0"></i>
+                            <span>✓ Ready</span>
+                        </button>
+                    </form>
+                </div>
             `;
         }
 

@@ -849,8 +849,9 @@ namespace AdministratorWeb.Controllers.Api
                                 "Robot {RobotName} has returned to base for request {RequestId} - laundry is washing",
                                 robotName, activeRequest.Id);
 
-                            // AUTO-QUEUE: Process next pending request if auto-accept is enabled
-                            await ProcessNextPendingRequestInQueueAsync(robot);
+                            // REMOVED AUTO-QUEUE: Admin must manually click "Ready" button after unloading dirty laundry
+                            // Admin will trigger next request via MarkRobotReady() endpoint in RequestsController
+                            // await ProcessNextPendingRequestInQueueAsync(robot);
                         }
                         else
                         {

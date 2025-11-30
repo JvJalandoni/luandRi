@@ -41,6 +41,10 @@ namespace AdministratorWeb.Controllers
             var userManager = HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
             var customers = await userManager.Users.OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ToListAsync();
 
+            // Get auto-accept setting for UI behavior (hide Accept/Decline buttons when auto-accept is ON)
+            var settings = await _context.LaundrySettings.FirstOrDefaultAsync();
+            ViewBag.AutoAcceptEnabled = settings?.AutoAcceptRequests ?? false;
+
             var dto = new RequestsIndexDto
             {
                 Requests = requests,
@@ -461,6 +465,98 @@ namespace AdministratorWeb.Controllers
             {
                 _logger.LogError(ex, "Error starting delivery for request {RequestId}", requestId);
                 TempData["Error"] = "An error occurred while starting the delivery.";
+            }
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        /// <summary>
+        /// Marks robot as ready after unloading dirty laundry, triggers next queued request processing
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> MarkRobotReady(int id)
+        {
+            var request = await _context.LaundryRequests.FindAsync(id);
+
+            if (request == null)
+            {
+                TempData["Error"] = "Request not found.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            // Verify request is at ReturnedToBase or Washing status
+            if (request.Status != RequestStatus.ReturnedToBase &&
+                request.Status != RequestStatus.Washing)
+            {
+                TempData["Error"] = "Request must be at ReturnedToBase or Washing status.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            // Get the robot
+            var robot = await _robotService.GetRobotAsync(request.AssignedRobotName);
+            if (robot == null)
+            {
+                TempData["Error"] = "Robot not found.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            try
+            {
+                // Process next pending request in queue (if any)
+                var settings = await _context.LaundrySettings.FirstOrDefaultAsync();
+                if (settings?.AutoAcceptRequests == true)
+                {
+                    var nextRequest = await _context.LaundryRequests
+                        .Where(r => r.Status == RequestStatus.Pending)
+                        .OrderBy(r => r.RequestedAt)
+                        .FirstOrDefaultAsync();
+
+                    if (nextRequest != null)
+                    {
+                        // Auto-accept next request
+                        nextRequest.Status = RequestStatus.Accepted;
+                        nextRequest.AcceptedAt = DateTime.UtcNow;
+                        nextRequest.AssignedRobotName = robot.Name;
+
+                        await _context.SaveChangesAsync();
+
+                        // Start robot line following to customer room
+                        var lineFollowingStarted = await _robotService.SetLineFollowingAsync(robot.Name, true);
+
+                        if (lineFollowingStarted)
+                        {
+                            nextRequest.Status = RequestStatus.RobotEnRoute;
+                            robot.CurrentTask = $"Navigating to room {nextRequest.RoomName} for request #{nextRequest.Id}";
+                            robot.Status = RobotStatus.Busy;
+
+                            await _context.SaveChangesAsync();
+
+                            _logger.LogInformation("Robot marked ready, processing next request {RequestId}", nextRequest.Id);
+                            TempData["Success"] = $"Robot ready! Processing next request #{nextRequest.Id} for {nextRequest.CustomerName}.";
+                        }
+                        else
+                        {
+                            TempData["Error"] = "Failed to start robot navigation to next request.";
+                            _logger.LogError("Failed to start line following for next request {RequestId}", nextRequest.Id);
+                        }
+                    }
+                    else
+                    {
+                        TempData["Success"] = "Robot marked as ready. No pending requests in queue.";
+                        _logger.LogInformation("Robot marked ready but no pending requests to process");
+                    }
+                }
+                else
+                {
+                    TempData["Success"] = "Robot marked as ready. Auto-accept is disabled.";
+                    _logger.LogInformation("Robot marked ready but auto-accept is disabled");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking robot ready for request {RequestId}", id);
+                TempData["Error"] = "An error occurred while marking robot as ready.";
             }
 
             return RedirectToAction(nameof(Index));

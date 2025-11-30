@@ -121,89 +121,114 @@ namespace AdministratorWeb.Controllers.Api
                     .FirstOrDefaultAsync(b => b.MacAddress.ToUpper() == customer.AssignedBeaconMacAddress.ToUpper())
                 : null;
 
-            // Check if auto-accept is enabled
-            var settings = await _context.LaundrySettings.FirstOrDefaultAsync();
-            var autoAccept = settings?.AutoAcceptRequests ?? false;
-
-            // QUEUE LOGIC: Only auto-accept if no other robot has an active accepted/in-progress request
-            if (autoAccept)
+            // CRITICAL SECTION: Use database transaction to prevent race condition when 2 simultaneous requests arrive
+            // This ensures only ONE request can check and modify state at a time
+            using (var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable))
             {
-                var anyActiveAcceptedRequest = await _context.LaundryRequests
-                    .AnyAsync(r => r.Status == RequestStatus.Accepted ||
-                                   r.Status == RequestStatus.LaundryLoaded ||
-                                   r.Status == RequestStatus.ArrivedAtRoom ||
-                                   r.Status == RequestStatus.FinishedWashingGoingToRoom ||
-                                   r.Status == RequestStatus.FinishedWashingGoingToBase);
-
-                if (anyActiveAcceptedRequest)
+                try
                 {
-                    // Robot is busy, don't auto-accept - queue this request as Pending
-                    autoAccept = false;
-                    _logger.LogInformation("Auto-accept disabled for this request - robot is busy with another request. Request will be queued.");
+                    // Lock on LaundrySettings to serialize concurrent request creation
+                    var settings = await _context.LaundrySettings
+                        .FromSqlRaw("SELECT * FROM LaundrySettings WITH (UPDLOCK, HOLDLOCK)")
+                        .FirstOrDefaultAsync();
+
+                    var autoAccept = settings?.AutoAcceptRequests ?? false;
+
+                    // QUEUE LOGIC: Only auto-accept if no other robot has an active request
+                    // Now checking COMPLETE list of busy statuses (10 statuses instead of 5)
+                    if (autoAccept)
+                    {
+                        var anyActiveAcceptedRequest = await _context.LaundryRequests
+                            .AnyAsync(r => r.Status == RequestStatus.Accepted ||
+                                           r.Status == RequestStatus.InProgress ||
+                                           r.Status == RequestStatus.RobotEnRoute ||
+                                           r.Status == RequestStatus.ArrivedAtRoom ||
+                                           r.Status == RequestStatus.LaundryLoaded ||
+                                           r.Status == RequestStatus.ReturnedToBase ||
+                                           r.Status == RequestStatus.FinishedWashingReadyToDeliver ||
+                                           r.Status == RequestStatus.FinishedWashingGoingToRoom ||
+                                           r.Status == RequestStatus.FinishedWashingArrivedAtRoom ||
+                                           r.Status == RequestStatus.FinishedWashingGoingToBase);
+
+                        if (anyActiveAcceptedRequest)
+                        {
+                            // Robot is busy, don't auto-accept - queue this request as Pending
+                            autoAccept = false;
+                            _logger.LogInformation("Auto-accept disabled for this request - robot is busy with another request. Request will be queued.");
+                        }
+                    }
+
+                    var request = new LaundryRequest
+                    {
+                        CustomerId = customerId,
+                        CustomerName = customerName ?? "Unknown",
+                        CustomerPhone = customer.PhoneNumber ?? "",
+                        Address = customer.RoomDescription ?? customer.RoomName ?? "",
+                        RoomName = customer.RoomName ?? "",
+                        Instructions = "",
+                        Type = RequestType.Delivery,
+                        Status = autoAccept ? RequestStatus.Accepted : RequestStatus.Pending,
+                        AssignedRobotName = assignedRobot.Name,
+                        AssignedBeaconMacAddress = customer.AssignedBeaconMacAddress ?? "",
+                        RequestedAt = DateTime.UtcNow,
+                        AcceptedAt = autoAccept ? DateTime.UtcNow : null,
+                        ProcessedAt = autoAccept ? DateTime.UtcNow : null,
+                        ScheduledAt = DateTime.UtcNow // Immediate pickup
+                    };
+
+                    _context.LaundryRequests.Add(request);
+
+                    // If auto-accept is enabled, update robot status and start line following
+                    if (autoAccept)
+                    {
+                        assignedRobot.Status = RobotStatus.Busy;
+                        assignedRobot.CurrentTask = $"Handling request #{request.Id}";
+
+                        await _context.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        // Start robot line following to target beacon
+                        var lineFollowingStarted = await _robotService.SetLineFollowingAsync(assignedRobot.Name, true);
+
+                        if (!lineFollowingStarted)
+                        {
+                            _logger.LogWarning("Failed to start line following for robot {RobotName}", assignedRobot.Name);
+                        }
+
+                        _logger.LogInformation("Auto-accepted request {RequestId}, robot {RobotName} dispatched to beacon {BeaconMac}",
+                            request.Id, assignedRobot.Name, request.AssignedBeaconMacAddress);
+
+                        return Ok(new
+                        {
+                            id = request.Id,
+                            status = request.Status.ToString(),
+                            assignedRobot = assignedRobot.Name,
+                            message = $"Laundry pickup request submitted and automatically accepted! Robot {assignedRobot.Name} is on the way."
+                        });
+                    }
+                    else
+                    {
+                        await _context.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        _logger.LogInformation("Auto-created and assigned request {RequestId} to robot {RobotName} for customer {CustomerId}",
+                            request.Id, assignedRobot.Name, customerId);
+
+                        return Ok(new
+                        {
+                            id = request.Id,
+                            status = request.Status.ToString(),
+                            assignedRobot = assignedRobot.Name,
+                            message = $"Laundry pickup request submitted successfully and assigned to robot {assignedRobot.Name}. Awaiting admin approval."
+                        });
+                    }
                 }
-            }
-
-            var request = new LaundryRequest
-            {
-                CustomerId = customerId,
-                CustomerName = customerName ?? "Unknown",
-                CustomerPhone = customer.PhoneNumber ?? "",
-                Address = customer.RoomDescription ?? customer.RoomName ?? "",
-                RoomName = customer.RoomName ?? "",
-                Instructions = "",
-                Type = RequestType.Delivery,
-                Status = autoAccept ? RequestStatus.Accepted : RequestStatus.Pending,
-                AssignedRobotName = assignedRobot.Name,
-                AssignedBeaconMacAddress = customer.AssignedBeaconMacAddress ?? "",
-                RequestedAt = DateTime.UtcNow,
-                AcceptedAt = autoAccept ? DateTime.UtcNow : null,
-                ProcessedAt = autoAccept ? DateTime.UtcNow : null,
-                ScheduledAt = DateTime.UtcNow // Immediate pickup
-            };
-
-            _context.LaundryRequests.Add(request);
-
-            // If auto-accept is enabled, update robot status and start line following
-            if (autoAccept)
-            {
-                assignedRobot.Status = RobotStatus.Busy;
-                assignedRobot.CurrentTask = $"Handling request #{request.Id}";
-
-                await _context.SaveChangesAsync();
-
-                // Start robot line following to target beacon
-                var lineFollowingStarted = await _robotService.SetLineFollowingAsync(assignedRobot.Name, true);
-
-                if (!lineFollowingStarted)
+                catch (Exception ex)
                 {
-                    _logger.LogWarning("Failed to start line following for robot {RobotName}", assignedRobot.Name);
+                    await transaction.RollbackAsync();
+                    _logger.LogError(ex, "Error creating request with transaction lock for customer {CustomerId}", customerId);
+                    throw;
                 }
-
-                _logger.LogInformation("Auto-accepted request {RequestId}, robot {RobotName} dispatched to beacon {BeaconMac}",
-                    request.Id, assignedRobot.Name, request.AssignedBeaconMacAddress);
-
-                return Ok(new
-                {
-                    id = request.Id,
-                    status = request.Status.ToString(),
-                    assignedRobot = assignedRobot.Name,
-                    message = $"Laundry pickup request submitted and automatically accepted! Robot {assignedRobot.Name} is on the way."
-                });
-            }
-            else
-            {
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Auto-created and assigned request {RequestId} to robot {RobotName} for customer {CustomerId}",
-                    request.Id, assignedRobot.Name, customerId);
-
-                return Ok(new
-                {
-                    id = request.Id,
-                    status = request.Status.ToString(),
-                    assignedRobot = assignedRobot.Name,
-                    message = $"Laundry pickup request submitted successfully and assigned to robot {assignedRobot.Name}. Awaiting admin approval."
-                });
             }
         }
 
