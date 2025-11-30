@@ -10,11 +10,13 @@ namespace AdministratorWeb.Areas.Identity.Pages.Account
     public class LoginModel : PageModel
     {
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly ILogger<LoginModel> _logger;
 
-        public LoginModel(SignInManager<ApplicationUser> signInManager, ILogger<LoginModel> logger)
+        public LoginModel(SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager, ILogger<LoginModel> logger)
         {
             _signInManager = signInManager;
+            _userManager = userManager;
             _logger = logger;
         }
 
@@ -73,7 +75,23 @@ namespace AdministratorWeb.Areas.Identity.Pages.Account
 
                 if (result.Succeeded)
                 {
-                    _logger.LogInformation("User {Email} logged in.", Input.Email);
+                    // CHECK IF USER IS ADMINISTRATOR
+                    var user = await _userManager.FindByEmailAsync(Input.Email);
+                    if (user != null)
+                    {
+                        var isAdmin = await _userManager.IsInRoleAsync(user, "Administrator");
+                        
+                        if (!isAdmin)
+                        {
+                            // User is not an admin - sign them out immediately
+                            await _signInManager.SignOutAsync();
+                            _logger.LogWarning("Non-administrator user {Email} attempted to login to admin panel.", Input.Email);
+                            ModelState.AddModelError(string.Empty, "Access denied. This portal is for administrators only.");
+                            return Page();
+                        }
+                    }
+
+                    _logger.LogInformation("Administrator {Email} logged in.", Input.Email);
                     return LocalRedirect(returnUrl);
                 }
                 if (result.RequiresTwoFactor)
