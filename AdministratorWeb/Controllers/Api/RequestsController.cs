@@ -108,19 +108,6 @@ namespace AdministratorWeb.Controllers.Api
                 return BadRequest(new { message = "Customer not found" });
             }
 
-            // Auto-assign robot immediately
-            var assignedRobot = await AutoAssignRobotAsync();
-            if (assignedRobot == null)
-            {
-                return BadRequest(new { message = "No robots available at this time. Please try again later." });
-            }
-
-            // Get customer's room beacon
-            var roomBeacon = !string.IsNullOrEmpty(customer.AssignedBeaconMacAddress)
-                ? await _context.BluetoothBeacons
-                    .FirstOrDefaultAsync(b => b.MacAddress.ToUpper() == customer.AssignedBeaconMacAddress.ToUpper())
-                : null;
-
             // CRITICAL SECTION: Use database transaction to prevent race condition when 2 simultaneous requests arrive
             // This ensures only ONE request can check and modify state at a time
             using (var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable))
@@ -135,29 +122,61 @@ namespace AdministratorWeb.Controllers.Api
 
                     var autoAccept = settings?.AutoAcceptRequests ?? false;
 
-                    // QUEUE LOGIC: Only auto-accept if no other robot has an active request
-                    // Now checking COMPLETE list of busy statuses (10 statuses instead of 5)
-                    if (autoAccept)
-                    {
-                        var anyActiveAcceptedRequest = await _context.LaundryRequests
-                            .AnyAsync(r => r.Status == RequestStatus.Accepted ||
-                                           r.Status == RequestStatus.InProgress ||
-                                           r.Status == RequestStatus.RobotEnRoute ||
-                                           r.Status == RequestStatus.ArrivedAtRoom ||
-                                           r.Status == RequestStatus.LaundryLoaded ||
-                                           r.Status == RequestStatus.ReturnedToBase ||
-                                           r.Status == RequestStatus.FinishedWashingReadyToDeliver ||
-                                           r.Status == RequestStatus.FinishedWashingGoingToRoom ||
-                                           r.Status == RequestStatus.FinishedWashingArrivedAtRoom ||
-                                           r.Status == RequestStatus.FinishedWashingGoingToBase);
+                    // FIX FIFO BUG: Don't use AutoAssignRobotAsync() - it STEALS robots from older requests!
+                    // Check availability and assign directly without reassignment logic
+                    var allRobotsDb = await _context.RobotStates
+                        .FromSqlRaw("SELECT * FROM RobotStates FOR UPDATE")
+                        .ToListAsync();
 
-                        if (anyActiveAcceptedRequest)
+                    var activeRobotsDb = allRobotsDb.Where(r => r.IsActive && r.CanAcceptRequests).ToList();
+                    var availableRobotsDb = activeRobotsDb.Where(r => r.Status == RobotStatus.Available).ToList();
+
+                    ConnectedRobot? assignedRobot;
+
+                    if (!availableRobotsDb.Any())
+                    {
+                        // No available robots - queue as Pending (DON'T steal from older requests!)
+                        if (!activeRobotsDb.Any())
                         {
-                            // Robot is busy, don't auto-accept - queue this request as Pending
-                            autoAccept = false;
-                            _logger.LogInformation("Auto-accept disabled for this request - robot is busy with another request. Request will be queued.");
+                            await transaction.RollbackAsync();
+                            return BadRequest(new { message = "No robots available at this time. Please try again later." });
+                        }
+
+                        var robotDb = activeRobotsDb.First();
+                        assignedRobot = await _robotService.GetRobotAsync(robotDb.RobotName);
+
+                        if (assignedRobot == null)
+                        {
+                            await transaction.RollbackAsync();
+                            return BadRequest(new { message = "Robot service unavailable." });
+                        }
+
+                        autoAccept = false; // Force Pending status - will process when robot available
+                        _logger.LogInformation("All robots busy - queuing request as Pending for {RobotName}", assignedRobot.Name);
+                    }
+                    else
+                    {
+                        // Robot available - assign without stealing!
+                        var robotDb = availableRobotsDb.First();
+                        assignedRobot = await _robotService.GetRobotAsync(robotDb.RobotName);
+
+                        if (assignedRobot == null)
+                        {
+                            await transaction.RollbackAsync();
+                            return BadRequest(new { message = "Robot service unavailable." });
+                        }
+
+                        if (autoAccept)
+                        {
+                            _logger.LogInformation("Auto-accepting request - robot {RobotName} available", assignedRobot.Name);
                         }
                     }
+
+                    // Get customer's room beacon
+                    var roomBeacon = !string.IsNullOrEmpty(customer.AssignedBeaconMacAddress)
+                        ? await _context.BluetoothBeacons
+                            .FirstOrDefaultAsync(b => b.MacAddress.ToUpper() == customer.AssignedBeaconMacAddress.ToUpper())
+                        : null;
 
                     var request = new LaundryRequest
                     {
@@ -179,11 +198,25 @@ namespace AdministratorWeb.Controllers.Api
 
                     _context.LaundryRequests.Add(request);
 
+                    // FIX: Save first to generate request.Id before using it
+                    await _context.SaveChangesAsync();
+
                     // If auto-accept is enabled, update robot status and start line following
                     if (autoAccept)
                     {
+                        // Update in-memory robot status (NOW request.Id is available)
                         assignedRobot.Status = RobotStatus.Busy;
                         assignedRobot.CurrentTask = $"Handling request #{request.Id}";
+
+                        // FIX FIFO BUG: Also update robot status in DATABASE within transaction
+                        var robotState = await _context.RobotStates
+                            .FirstOrDefaultAsync(r => r.RobotName == assignedRobot.Name);
+                        if (robotState != null)
+                        {
+                            robotState.Status = RobotStatus.Busy;
+                            robotState.CurrentTask = $"Handling request #{request.Id}";
+                            robotState.LastUpdated = DateTime.UtcNow;
+                        }
 
                         await _context.SaveChangesAsync();
                         await transaction.CommitAsync();
@@ -621,9 +654,13 @@ namespace AdministratorWeb.Controllers.Api
         {
             try
             {
-                // Get all active online robots
-                var allRobots = await _robotService.GetAllRobotsAsync();
-                var activeRobots = allRobots.Where(r => r.IsActive && !r.IsOffline).ToList();
+                // FIX FIFO BUG: Query robots from DATABASE with lock instead of in-memory service
+                // This ensures proper FIFO ordering during simultaneous requests
+                var allRobotsDb = await _context.RobotStates
+                    .FromSqlRaw("SELECT * FROM RobotStates FOR UPDATE")
+                    .ToListAsync();
+
+                var activeRobots = allRobotsDb.Where(r => r.IsActive && r.CanAcceptRequests).ToList();
 
                 if (!activeRobots.Any())
                 {
@@ -636,8 +673,18 @@ namespace AdministratorWeb.Controllers.Api
 
                 if (availableRobots.Any())
                 {
-                    // Return the first available robot (could be enhanced with proximity logic later)
-                    var selectedRobot = availableRobots.First();
+                    // Convert RobotState to ConnectedRobot for compatibility
+                    var selectedRobotDb = availableRobots.First();
+
+                    // Get the corresponding ConnectedRobot from in-memory service
+                    var selectedRobot = await _robotService.GetRobotAsync(selectedRobotDb.RobotName);
+
+                    if (selectedRobot == null)
+                    {
+                        _logger.LogWarning("Robot {RobotName} found in DB but not in memory", selectedRobotDb.RobotName);
+                        return null;
+                    }
+
                     _logger.LogInformation("Auto-assigned available robot {RobotName}",
                         selectedRobot.Name);
                     return selectedRobot;
@@ -648,14 +695,14 @@ namespace AdministratorWeb.Controllers.Api
 
                 if (busyRobots.Any())
                 {
-                    // Find the robot with the oldest current task assignment
-                    var leastRecentlyAssigned = busyRobots
-                        .OrderBy(r => r.LastPing) // Using LastPing as proxy for assignment time
+                    // Find the robot with the oldest current task assignment (using LastUpdated from DB)
+                    var leastRecentlyAssignedDb = busyRobots
+                        .OrderBy(r => r.LastUpdated) // Using LastUpdated from database
                         .First();
 
                     // Find and reassign the current request of this robot
                     var currentRequest = await _context.LaundryRequests
-                        .Where(req => req.AssignedRobotName.ToLower() == leastRecentlyAssigned.Name.ToLower() &&
+                        .Where(req => req.AssignedRobotName.ToLower() == leastRecentlyAssignedDb.RobotName.ToLower() &&
                                       req.Status != RequestStatus.Completed &&
                                       req.Status != RequestStatus.Cancelled &&
                                       req.Status != RequestStatus.Declined)
@@ -671,12 +718,23 @@ namespace AdministratorWeb.Controllers.Api
 
                         _logger.LogInformation(
                             "Reassigning robot {RobotName} from request {OldRequestId}",
-                            leastRecentlyAssigned.Name, currentRequest.Id);
+                            leastRecentlyAssignedDb.RobotName, currentRequest.Id);
                     }
 
-                    // Reset robot status to be assigned to new request
-                    leastRecentlyAssigned.Status = RobotStatus.Available;
-                    leastRecentlyAssigned.CurrentTask = null;
+                    // Reset robot status in database
+                    leastRecentlyAssignedDb.Status = RobotStatus.Available;
+                    leastRecentlyAssignedDb.CurrentTask = null;
+                    leastRecentlyAssignedDb.LastUpdated = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+
+                    // Get the corresponding ConnectedRobot from in-memory service
+                    var leastRecentlyAssigned = await _robotService.GetRobotAsync(leastRecentlyAssignedDb.RobotName);
+
+                    if (leastRecentlyAssigned == null)
+                    {
+                        _logger.LogWarning("Robot {RobotName} found in DB but not in memory", leastRecentlyAssignedDb.RobotName);
+                        return null;
+                    }
 
                     return leastRecentlyAssigned;
                 }

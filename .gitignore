@@ -162,3 +162,15 @@ publish/
 # SQL scripts (might contain sensitive data)
 *.sql
 # Cache refresh
+
+# Thesis documentation files
+posterexample.jpg
+thesis.docx
+thesis.html
+OverViewExample.jpg
+OverViewExample2.jpg
+THESIS_PRESENTATION_SCRIPT.txt
+Usability_Questionnaires.txt
+QUEUE_SYSTEM_ANALYSIS.md
+SESSION_CONTEXT.txt
+

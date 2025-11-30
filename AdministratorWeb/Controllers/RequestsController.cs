@@ -36,6 +36,7 @@ namespace AdministratorWeb.Controllers
 
             var robots = await _robotService.GetAllRobotsAsync();
             var availableRobots = robots.Where(r => r.IsActive && !r.IsOffline).ToList();
+            var availableNotBusyRobots = availableRobots.Where(r => r.Status == RobotStatus.Available).ToList();
 
             // Get all customers for manual request creation - same way as /users does it
             var userManager = HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
@@ -44,6 +45,7 @@ namespace AdministratorWeb.Controllers
             // Get auto-accept setting for UI behavior (hide Accept/Decline buttons when auto-accept is ON)
             var settings = await _context.LaundrySettings.FirstOrDefaultAsync();
             ViewBag.AutoAcceptEnabled = settings?.AutoAcceptRequests ?? false;
+            ViewBag.AllRobotsBusy = availableRobots.Any() && !availableNotBusyRobots.Any();
 
             var dto = new RequestsIndexDto
             {
@@ -527,8 +529,20 @@ namespace AdministratorWeb.Controllers
                         if (lineFollowingStarted)
                         {
                             nextRequest.Status = RequestStatus.RobotEnRoute;
+
+                            // Update in-memory robot status
                             robot.CurrentTask = $"Navigating to room {nextRequest.RoomName} for request #{nextRequest.Id}";
                             robot.Status = RobotStatus.Busy;
+
+                            // FIX: Also update robot status in DATABASE
+                            var robotState = await _context.RobotStates
+                                .FirstOrDefaultAsync(r => r.RobotName == robot.Name);
+                            if (robotState != null)
+                            {
+                                robotState.Status = RobotStatus.Busy;
+                                robotState.CurrentTask = $"Navigating to room {nextRequest.RoomName} for request #{nextRequest.Id}";
+                                robotState.LastUpdated = DateTime.UtcNow;
+                            }
 
                             await _context.SaveChangesAsync();
 

@@ -661,6 +661,7 @@
 <!-- Pass server-side settings to JavaScript -->
 <script>
     window.autoAcceptEnabled = @Json.Serialize(ViewBag.AutoAcceptEnabled ?? false);
+    window.allRobotsBusy = @Json.Serialize(ViewBag.AllRobotsBusy ?? false);
 </script>
 
 <!-- Real-time requests script -->

@@ -171,9 +171,11 @@ namespace AdministratorWeb.Controllers.Api
                 var followColor = await GetRobotFollowColor(name);
 
                 // Get active request to check if robot should be moving or stopped
+                // FIX: Add ALL movement statuses (not just 5!)
                 var activeRequestForMovement = await _context.LaundryRequests
                     .FirstOrDefaultAsync(r => r.AssignedRobotName == name &&
                                               (r.Status == RequestStatus.Accepted ||
+                                               r.Status == RequestStatus.RobotEnRoute || // FIX: robot traveling
                                                r.Status == RequestStatus.LaundryLoaded ||
                                                r.Status == RequestStatus.FinishedWashingGoingToRoom ||
                                                r.Status == RequestStatus.FinishedWashingGoingToBase ||
@@ -444,20 +446,39 @@ namespace AdministratorWeb.Controllers.Api
         {
             try
             {
+                // FIX: Case-insensitive robot name matching + Add missing statuses
                 var activeRequest = await _context.LaundryRequests
-                    .FirstOrDefaultAsync(r => r.AssignedRobotName == robotName &&
-                                              (r.Status == RequestStatus
-                                                   .Accepted || // this will make the robot go to customer room
-                                               r.Status == RequestStatus
-                                                   .LaundryLoaded || // this will make the robot go to base
-                                               r.Status == RequestStatus
-                                                   .FinishedWashingGoingToRoom || // makes the robot go to customer
+                    .FirstOrDefaultAsync(r => r.AssignedRobotName.ToLower() == robotName.ToLower() &&
+                                              (r.Status == RequestStatus.Accepted || // go to customer room
+                                               r.Status == RequestStatus.RobotEnRoute || // FIX: robot is traveling
+                                               r.Status == RequestStatus.ArrivedAtRoom || // FIX: robot at customer
+                                               r.Status == RequestStatus.InProgress || // FIX: loading laundry
+                                               r.Status == RequestStatus.LaundryLoaded || // go to base
+                                               r.Status == RequestStatus.ReturnedToBase || // FIX: at base
+                                               r.Status == RequestStatus.Washing || // FIX: laundry washing
+                                               r.Status == RequestStatus.FinishedWashingReadyToDeliver || // FIX: ready
+                                               r.Status == RequestStatus.FinishedWashingGoingToRoom || // go to customer
+                                               r.Status == RequestStatus.FinishedWashingArrivedAtRoom || // FIX: at customer
                                                r.Status == RequestStatus.FinishedWashingGoingToBase || // go to base
-                                               r.Status == RequestStatus.Cancelled)); // cancelled - robot returns to base
+                                               r.Status == RequestStatus.Cancelled)); // cancelled - return to base
 
                 if (activeRequest == null)
                 {
-                    _logger.LogInformation("No active request found for robot {RobotName}", robotName);
+                    // Debug: Check if there's ANY request for this robot
+                    var anyRequest = await _context.LaundryRequests
+                        .Where(r => r.AssignedRobotName.ToLower() == robotName.ToLower())
+                        .Select(r => new { r.Id, r.Status, r.AssignedRobotName })
+                        .ToListAsync();
+
+                    if (anyRequest.Any())
+                    {
+                        _logger.LogWarning("Robot {RobotName} has {Count} requests but none are active. Requests: {Requests}",
+                            robotName, anyRequest.Count, string.Join(", ", anyRequest.Select(r => $"#{r.Id} ({r.Status})")));
+                    }
+                    else
+                    {
+                        _logger.LogInformation("No active request found for robot {RobotName}", robotName);
+                    }
                     return null;
                 }
 
@@ -797,6 +818,7 @@ namespace AdministratorWeb.Controllers.Api
                 var activeRequest = await _context.LaundryRequests
                     .FirstOrDefaultAsync(r => r.AssignedRobotName == robotName &&
                                               (r.Status == RequestStatus.Accepted ||
+                                               r.Status == RequestStatus.RobotEnRoute || // FIX: Add RobotEnRoute!
                                                r.Status == RequestStatus.LaundryLoaded ||
                                                r.Status == RequestStatus.FinishedWashingGoingToRoom ||
                                                r.Status == RequestStatus.FinishedWashingGoingToBase ||
@@ -805,9 +827,9 @@ namespace AdministratorWeb.Controllers.Api
                 if (activeRequest != null)
                 {
                     _logger.LogInformation($"current request status: {activeRequest.Status}");
-                    if (activeRequest.Status == RequestStatus.Accepted)
+                    if (activeRequest.Status == RequestStatus.Accepted || activeRequest.Status == RequestStatus.RobotEnRoute)
                     {
-                        // Robot has arrived at customer room
+                        // Robot has arrived at customer room (from either Accepted or RobotEnRoute status)
                         activeRequest.Status = RequestStatus.ArrivedAtRoom;
                         activeRequest.ArrivedAtRoomAt = DateTime.UtcNow;
 
