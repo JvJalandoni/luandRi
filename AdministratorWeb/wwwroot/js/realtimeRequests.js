@@ -434,20 +434,18 @@ class RealtimeRequestsManager {
         }
 
         // Ready button for ReturnedToBase and Washing - admin confirms robot ready for next request
-        if (request.status === 'ReturnedToBase' || request.status === 'Washing') {
+        // Only show if auto-accept is ON (otherwise admin manually accepts requests anyway)
+        if ((request.status === 'ReturnedToBase' || request.status === 'Washing') && window.autoAcceptEnabled) {
             buttons += `
-                <div class="inline-flex flex-col items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p class="text-sm text-gray-700 font-medium">Is robot ready for next auto-accept?</p>
-                    <form action="/Requests/MarkRobotReady" method="post" class="inline">
-                        <input type="hidden" name="id" value="${request.id}"/>
-                        <input type="hidden" name="__RequestVerificationToken" value="${document.querySelector('input[name="__RequestVerificationToken"]')?.value}"/>
-                        <button type="submit"
-                                class="inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 text-sm font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap">
-                            <i data-lucide="check-circle-2" class="w-4 h-4 mr-2 flex-shrink-0"></i>
-                            <span>✓ Ready</span>
-                        </button>
-                    </form>
-                </div>
+                <form action="/Requests/MarkRobotReady" method="post" class="inline">
+                    <input type="hidden" name="id" value="${request.id}"/>
+                    <input type="hidden" name="__RequestVerificationToken" value="${document.querySelector('input[name="__RequestVerificationToken"]')?.value}"/>
+                    <button type="submit"
+                            class="inline-flex items-center px-4 py-2 bg-brand-600 text-white hover:bg-brand-700 text-sm font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap">
+                        <i data-lucide="play-circle" class="w-4 h-4 mr-2 flex-shrink-0"></i>
+                        <span>Is Robot Ready?</span>
+                    </button>
+                </form>
             `;
         }
 
