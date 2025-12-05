@@ -115,7 +115,7 @@ flowchart TD
     %% Robot Data Exchange (Continuous Loop)
     SetNavTarget --> RobotPolling[🤖 Robot Data Exchange<br/>POST /api/robot/NAME/data-exchange<br/>Every 1 Second]
 
-    RobotPolling --> RobotSendsData[Robot Sends:<br/>- Detected Beacons array<br/>- Weight (kg)<br/>- UltrasonicDistance<br/>- IsInTarget (bool)<br/>- Timestamp]
+    RobotPolling --> RobotSendsData[Robot Sends:<br/>- Detected Beacons array<br/>- Weight in kg<br/>- UltrasonicDistance<br/>- IsInTarget boolean<br/>- Timestamp]
 
     RobotSendsData --> ServerProcesses[Server Processes Data]
     ServerProcesses --> CheckArrivalFlag{IsInTarget<br/>= true?}
@@ -313,7 +313,7 @@ flowchart TD
 
     CreateAdjustment --> LogPayment[(SystemLogs Table<br/>Payment Completed<br/>Method, Amount)]
 
-    LogPayment --> CalcRevenue[💰 Calculate Total Revenue:<br/>SUM(Completed Payments)<br/>- SUM(Refunds)<br/>+ SUM(AddRevenue Adjustments)<br/>- SUM(Expenses)]
+    LogPayment --> CalcRevenue[💰 Calculate Total Revenue:<br/>SUM Completed Payments<br/>- SUM Refunds<br/>+ SUM AddRevenue Adjustments<br/>- SUM Expenses]
 
     CalcRevenue --> UpdateDashboard[Update Accounting Dashboard<br/>Real-time Metrics]
 
@@ -326,7 +326,7 @@ flowchart TD
     DisplayReceipt --> AdminReporting{Admin Generate<br/>Report?}
     AdminReporting -->|Yes| SelectPeriod[Select Period:<br/>- Today<br/>- This Week<br/>- This Month<br/>- Custom Range]
 
-    SelectPeriod --> QueryReports[(Query Database:<br/>Filter Payments by Date<br/>JOIN Requests<br/>GROUP BY Customer/Method)]
+    SelectPeriod --> QueryReports[(Query Database:<br/>Filter Payments by Date<br/>JOIN Requests<br/>GROUP BY Customer and Method)]
 
     QueryReports --> GenerateReport[📊 Generate Sales Report:<br/>- Revenue by Method<br/>- Top Customers<br/>- Transaction Count<br/>- Average Transaction<br/>- Daily/Weekly Trends]
 
@@ -350,7 +350,7 @@ flowchart TD
     DisplayMessages --> CustomerSendsMsg[Customer Types Message<br/>Optional: Attach Image]
     CustomerSendsMsg --> SendMessage[POST /api/messages/send]
 
-    SendMessage --> SaveMessage[(INSERT INTO Messages<br/>FromCustomerId<br/>Content<br/>ImagePath (if attached)<br/>IsReadByAdmin = false<br/>CreatedAt = Now)]
+    SendMessage --> SaveMessage[(INSERT INTO Messages<br/>FromCustomerId<br/>Content<br/>ImagePath if attached<br/>IsReadByAdmin = false<br/>CreatedAt = Now)]
 
     SaveMessage --> NotifyAdmin[📧 Email Admin:<br/>New Customer Message]
     NotifyAdmin --> AdminOpensMessages[👨‍💼 Admin Opens<br/>Message Center]
