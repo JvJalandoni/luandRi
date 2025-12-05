@@ -113,7 +113,7 @@ flowchart TD
     GetBeaconDetails --> SetNavTarget[Set Beacon as<br/>NavigationTarget = true]
 
     %% Robot Data Exchange (Continuous Loop)
-    SetNavTarget --> RobotPolling[🤖 Robot Data Exchange<br/>POST /api/robot/{name}/data-exchange<br/>Every 1 Second]
+    SetNavTarget --> RobotPolling[🤖 Robot Data Exchange<br/>POST /api/robot/NAME/data-exchange<br/>Every 1 Second]
 
     RobotPolling --> RobotSendsData[Robot Sends:<br/>- Detected Beacons array<br/>- Weight (kg)<br/>- UltrasonicDistance<br/>- IsInTarget (bool)<br/>- Timestamp]
 
@@ -170,10 +170,10 @@ flowchart TD
     CheckMaxWeight -->|Yes| EnableConfirm[✅ Enable<br/>'Confirm Loaded' Button]
     EnableConfirm --> CustomerConfirms[Customer Clicks<br/>'Confirm Loaded']
 
-    CustomerConfirms --> RecordWeight[POST /api/requests/{id}/confirm-loaded]
+    CustomerConfirms --> RecordWeight[POST /api/requests/ID/confirm-loaded]
     RecordWeight --> CalcCost[Calculate Cost:<br/>TotalCost = Weight × RatePerKg<br/>Default: ₱50/kg]
 
-    CalcCost --> UpdateLoaded[(UPDATE Requests<br/>SET Status = LaundryLoaded<br/>Weight = {weight}<br/>TotalCost = {cost}<br/>LoadedAt = Now)]
+    CalcCost --> UpdateLoaded[(UPDATE Requests<br/>SET Status = LaundryLoaded<br/>Weight = weight<br/>TotalCost = cost<br/>LoadedAt = Now)]
 
     UpdateLoaded --> LogLoaded[(SystemLogs Table<br/>Laundry Loaded<br/>Weight, Cost)]
 
@@ -208,7 +208,7 @@ flowchart TD
     AdminWashes --> AdminOpensDash[Admin Opens Dashboard<br/>Sees 'Washing' Requests]
 
     AdminOpensDash --> AdminFinishes[Admin Finishes Washing<br/>Clicks 'Mark Done']
-    AdminFinishes --> MarkDone[POST /api/requests/{id}/mark-washing-done]
+    AdminFinishes --> MarkDone[POST /api/requests/ID/mark-washing-done]
 
     MarkDone --> UpdateFinished[(UPDATE Requests<br/>SET Status = FinishedWashing<br/>FinishedWashingAt = Now)]
     UpdateFinished --> LogFinished[(SystemLogs Table<br/>Washing Completed)]
@@ -266,7 +266,7 @@ flowchart TD
     CheckUnloadWeight -->|Yes| EnableUnloadConfirm[✅ Enable<br/>'Confirm Unloaded' Button]
     EnableUnloadConfirm --> CustomerConfirmsUnload[Customer Clicks<br/>'Confirm Unloaded']
 
-    CustomerConfirmsUnload --> RecordUnload[POST /api/requests/{id}/confirm-unloaded]
+    CustomerConfirmsUnload --> RecordUnload[POST /api/requests/ID/confirm-unloaded]
     RecordUnload --> UpdateUnloaded[(UPDATE Requests<br/>SET Status = FinishedWashingGoingToBase<br/>UnloadedAt = Now)]
 
     UpdateUnloaded --> LogUnloaded[(SystemLogs Table<br/>Laundry Unloaded)]
@@ -305,11 +305,11 @@ flowchart TD
     AdminSelectsPayment --> AdminPaymentAction{Admin<br/>Action?}
 
     AdminPaymentAction -->|Mark as Paid| SelectMethod[Select Payment Method:<br/>- Cash<br/>- GCash]
-    SelectMethod --> RecordPayment[POST /api/payment/{id}/mark-paid]
+    SelectMethod --> RecordPayment[POST /api/payment/ID/mark-paid]
 
-    RecordPayment --> UpdatePaymentPaid[(UPDATE Payments<br/>SET Status = Completed<br/>Method = {Cash/GCash}<br/>CompletedAt = Now)]
+    RecordPayment --> UpdatePaymentPaid[(UPDATE Payments<br/>SET Status = Completed<br/>Method = Cash or GCash<br/>CompletedAt = Now)]
 
-    UpdatePaymentPaid --> CreateAdjustment[(INSERT INTO PaymentAdjustments<br/>Type = CompletePayment<br/>Amount = {amount}<br/>Description<br/>CreatedAt = Now)]
+    UpdatePaymentPaid --> CreateAdjustment[(INSERT INTO PaymentAdjustments<br/>Type = CompletePayment<br/>Amount = amount<br/>Description<br/>CreatedAt = Now)]
 
     CreateAdjustment --> LogPayment[(SystemLogs Table<br/>Payment Completed<br/>Method, Amount)]
 
@@ -317,7 +317,7 @@ flowchart TD
 
     CalcRevenue --> UpdateDashboard[Update Accounting Dashboard<br/>Real-time Metrics]
 
-    UpdateDashboard --> GenerateReceipt[📄 Generate Receipt:<br/>Number: RCP-YYYY-NNNNNN<br/>Customer: Name<br/>Weight: {kg}<br/>Rate: ₱50/kg<br/>Total: ₱{amount}<br/>Method: {method}<br/>Date: {date}]
+    UpdateDashboard --> GenerateReceipt[📄 Generate Receipt:<br/>Number: RCP-YYYY-NNNNNN<br/>Customer: Name<br/>Weight: kg<br/>Rate: ₱50/kg<br/>Total: ₱amount<br/>Method: method<br/>Date: date]
 
     GenerateReceipt --> CustomerViewReceipt[👤 Customer Opens<br/>'View Receipt']
     CustomerViewReceipt --> DisplayReceipt[📱 Display Receipt:<br/>Printable Format<br/>Share Option]
@@ -358,7 +358,7 @@ flowchart TD
     AdminOpensMessages --> ShowConversations[Show All Conversations<br/>Unread Count Badge]
     ShowConversations --> AdminSelectsConvo[Admin Selects<br/>Customer Conversation]
 
-    AdminSelectsConvo --> MarkAsRead[(UPDATE Messages<br/>SET IsReadByAdmin = true<br/>WHERE CustomerId = {id})]
+    AdminSelectsConvo --> MarkAsRead[(UPDATE Messages<br/>SET IsReadByAdmin = true<br/>WHERE CustomerId = id)]
 
     MarkAsRead --> AdminResponds[Admin Types Response<br/>Optional: Attach Image]
     AdminResponds --> SendAdminMsg[POST /api/messages/send]
