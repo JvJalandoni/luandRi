@@ -1,682 +1,615 @@
 # Complete System Data Flow Diagram (DFD)
-## End-to-End Laundry Request Lifecycle - All Features Integrated
+## Multi-Actor System - Customer, Administrator, and Robot
 
-This document contains the **comprehensive Data Flow Diagram** showing the complete journey from customer request creation to completion, including all system features: authentication, robot navigation, payment, accounting, messaging, logging, and monitoring.
+This document contains the **comprehensive Data Flow Diagram** showing all system actors (Customer, Admin, Robot) starting independently and interconnecting through the complete laundry service lifecycle.
 
 ---
 
-## Master End-to-End System Flow
+## Master System Architecture - All Actors Connected
 
-This DFD shows **everything** - from customer login to final payment, with all subsystems integrated:
+This DFD shows **three independent starting points** that converge into one integrated system:
 
 ```mermaid
 flowchart TD
-    %% START: Customer Authentication
-    Start([👤 Customer Opens Mobile App]) --> CheckToken{Has Valid<br/>JWT Token?}
+    %% ==========================================
+    %% CUSTOMER MOBILE APP FLOW - PRIMARY
+    %% ==========================================
+    StartCustomer([🎯 START 1: Customer Opens Mobile App])
 
+    StartCustomer --> CheckToken{Has Valid<br/>JWT Token?}
     CheckToken -->|No| LoginScreen[Show Login Screen]
-    LoginScreen --> EnterCreds[Customer Enters:<br/>Email/Username<br/>Password]
+    LoginScreen --> EnterCreds[Enter Credentials:<br/>Email and Password]
     EnterCreds --> LoginAPI[POST /api/auth/login]
 
     LoginAPI --> ValidateUser{Credentials<br/>Valid?}
-    ValidateUser -->|No| LoginFail[❌ Login Failed<br/>Log Failed Attempt]
-    LoginFail --> LogFailedLogin[(SystemLogs Table<br/>Failed Login Attempt)]
+    ValidateUser -->|No| LoginFail[❌ Login Failed]
+    LoginFail --> LogFailedLogin[(SystemLogs<br/>Failed Login)]
     LogFailedLogin --> LoginScreen
 
-    ValidateUser -->|Yes| CheckEmailConfirm{Email<br/>Confirmed?}
-    CheckEmailConfirm -->|No| EmailNotConfirmed[❌ Require Email Confirmation]
-    EmailNotConfirmed --> LoginScreen
-
-    CheckEmailConfirm -->|Yes| GenerateJWT[Generate JWT Token<br/>24hr Expiration<br/>Claims: CustomerId, Name, Role]
-    GenerateJWT --> StoreToken[Store Token in<br/>SecureStorage]
-    StoreToken --> LogSuccessLogin[(SystemLogs Table<br/>Successful Login)]
+    ValidateUser -->|Yes| GenerateJWT[Generate JWT Token<br/>24hr Expiration]
+    GenerateJWT --> StoreToken[Store in SecureStorage]
+    StoreToken --> LogSuccessLogin[(SystemLogs<br/>Successful Login)]
 
     CheckToken -->|Yes| Dashboard
-    LogSuccessLogin --> Dashboard[📱 Mobile App Dashboard]
+    LogSuccessLogin --> Dashboard[📱 Customer Dashboard]
 
-    %% Customer Creates Request
-    Dashboard --> ClickCreate[Customer Clicks<br/>'Create Request']
-    ClickCreate --> CheckDuplicate[GET /api/requests/active]
+    Dashboard --> CustomerActions{Customer<br/>Action?}
+    CustomerActions -->|Create Request| CreateRequest[Click Create Request]
+    CustomerActions -->|View Status| ViewStatus[View Active Request]
+    CustomerActions -->|Send Message| OpenMessages[Open Messages]
+    CustomerActions -->|View Receipt| ViewReceipt[View Payment Receipt]
 
-    CheckDuplicate --> HasActive{Customer Has<br/>Active Request?}
-    HasActive -->|Yes| RejectDupe[❌ Error: Already Have<br/>Active Request]
+    CreateRequest --> CheckDuplicate[GET /api/requests/active]
+    CheckDuplicate --> HasActive{Has Active<br/>Request?}
+    HasActive -->|Yes| RejectDupe[❌ Already Have Active Request]
     RejectDupe --> Dashboard
 
-    HasActive -->|No| ShowForm[Show Request Form:<br/>Special Instructions<br/>Preferred Schedule]
-    ShowForm --> FillForm[Customer Fills Form]
+    HasActive -->|No| ShowForm[Show Request Form]
+    ShowForm --> FillForm[Enter Instructions<br/>Preferred Schedule]
     FillForm --> SubmitRequest[POST /api/requests/create]
 
-    %% Server Validates and Creates Request
-    SubmitRequest --> ValidateRequest{Request<br/>Valid?}
-    ValidateRequest -->|No| ValidationError[❌ Validation Error<br/>Missing Fields]
+    SubmitRequest --> ValidateRequest{Valid?}
+    ValidateRequest -->|No| ValidationError[❌ Validation Error]
     ValidationError --> ShowForm
 
-    ValidateRequest -->|Yes| CreateRequestDB[(INSERT INTO Requests<br/>Status = Pending<br/>CustomerId<br/>CreatedAt = Now<br/>TotalCost = 0)]
+    ValidateRequest -->|Yes| CreateRequestDB[(INSERT INTO Requests<br/>Status = Pending<br/>CustomerId<br/>CreatedAt<br/>TotalCost = 0)]
 
-    CreateRequestDB --> LogRequestCreated[(SystemLogs Table<br/>Request Created<br/>CustomerId, RequestId)]
+    CreateRequestDB --> LogRequestCreated[(SystemLogs<br/>Request Created)]
 
-    %% Auto-Assignment Algorithm
-    LogRequestCreated --> TriggerQueue[⚙️ Background Queue Processor<br/>Triggered]
-    TriggerQueue --> GetRobots[Query: Get All<br/>Online Active Robots]
+    %% ==========================================
+    %% ADMIN WEB DASHBOARD FLOW
+    %% ==========================================
+    StartAdmin([⚙️ START 2: Admin Opens Web Dashboard])
 
-    GetRobots --> AnyRobots{Any Robots<br/>Online?}
-    AnyRobots -->|No| NoRobotsAvail[❌ No Robots Available<br/>Stay in Pending Queue]
-    NoRobotsAvail --> NotifyPending[📧 Email: Request Pending<br/>Admin Approval Needed]
-    NotifyPending --> WaitInQueue[Wait for Admin<br/>or Robot to Become Available]
+    StartAdmin --> AdminLogin[Admin Login<br/>ASP.NET Identity]
+    AdminLogin --> ValidateAdmin{Valid Admin<br/>Credentials?}
+    ValidateAdmin -->|No| AdminLoginFail[❌ Access Denied]
+    AdminLoginFail --> StartAdmin
 
-    AnyRobots -->|Yes| FindAvailable[Find Robots with<br/>Status = Available]
-    FindAvailable --> HasAvailable{Found Available<br/>Robot?}
+    ValidateAdmin -->|Yes| CheckAdminRole{Role =<br/>Administrator?}
+    CheckAdminRole -->|No| AdminLoginFail
+    CheckAdminRole -->|Yes| AdminDashboard[🖥️ Admin Dashboard]
 
-    HasAvailable -->|No| FindBusy[Find Busy Robots<br/>Check Current Tasks]
-    FindBusy --> SelectLRU[Select Least Recently<br/>Used Busy Robot]
-    SelectLRU --> ReassignRobot[Reset Current Request<br/>to Pending]
-    ReassignRobot --> AssignToNew[Assign Robot to<br/>New Request]
+    AdminDashboard --> AdminMenus{Admin<br/>Selects?}
+    AdminMenus -->|Requests| RequestMgmt[Request Management]
+    AdminMenus -->|Users| UserMgmt[User Management]
+    AdminMenus -->|Robots| RobotMgmt[Robot Monitoring]
+    AdminMenus -->|Beacons| BeaconConfig[Beacon Configuration]
+    AdminMenus -->|Accounting| AccountingDash[Accounting Dashboard]
+    AdminMenus -->|Messages| MessageCenter[Message Center]
+    AdminMenus -->|Settings| SystemSettings[System Settings]
 
-    HasAvailable -->|Yes| SelectFirst[Select First<br/>Available Robot]
-    SelectFirst --> AssignToNew
+    %% Request Management
+    RequestMgmt --> LoadRequests[Load All Requests<br/>Filter by Status]
+    LoadRequests --> DisplayRequests[Display Request List:<br/>Pending Top<br/>Active Requests<br/>Completed History]
 
-    AssignToNew --> UpdateAssignment[(UPDATE Requests<br/>SET AssignedRobotName<br/>UPDATE Robots<br/>SET Status = Busy)]
+    DisplayRequests --> AdminSelectReq{Admin<br/>Action?}
+    AdminSelectReq -->|Accept Pending| AcceptRequest[Accept Request]
+    AdminSelectReq -->|Decline| DeclineRequest[Decline with Reason]
+    AdminSelectReq -->|Mark Washing Done| MarkWashingDone[Mark Done]
+    AdminSelectReq -->|Start Delivery| StartDelivery[Assign Robot for Delivery]
+    AdminSelectReq -->|Cancel| AdminCancelReq[Cancel Request]
 
-    UpdateAssignment --> CheckAutoAccept{Auto-Accept<br/>Setting Enabled?}
+    %% User Management
+    UserMgmt --> UserCRUD[Create/Edit/Delete Users<br/>Assign Roles<br/>Assign Beacons]
+    UserCRUD --> UpdateUsersDB[(UPDATE Users Table)]
+    UpdateUsersDB --> LogUserChanges[(SystemLogs<br/>User Changes)]
 
-    CheckAutoAccept -->|No| SetPending[(UPDATE Requests<br/>SET Status = Pending)]
-    SetPending --> WaitAdminApproval[⏳ Wait for Admin Approval]
+    %% Robot Management
+    RobotMgmt --> ShowRobots[Display All Robots:<br/>Online Status<br/>Current Task<br/>Battery Level<br/>Last Ping]
+    ShowRobots --> AdminRobotAction{Admin<br/>Action?}
+    AdminRobotAction -->|Emergency Stop| EmergencyStop[Send Emergency Stop]
+    AdminRobotAction -->|Maintenance Mode| MaintenanceMode[Enable Maintenance]
+    AdminRobotAction -->|View Camera| ViewCamera[Live Camera Feed]
 
-    WaitAdminApproval --> AdminDashboard[👨‍💼 Admin Opens<br/>Request Dashboard]
-    AdminDashboard --> AdminSees[Admin Sees Pending Request<br/>Customer Info<br/>Assigned Robot<br/>Request Details]
+    %% Accounting
+    AccountingDash --> ShowMetrics[Show Financial Metrics:<br/>Total Revenue<br/>Pending Payments<br/>Daily/Weekly/Monthly]
+    ShowMetrics --> AdminPaymentAction{Payment<br/>Action?}
+    AdminPaymentAction -->|Mark Paid| MarkPaid[Record Payment<br/>Cash or GCash]
+    AdminPaymentAction -->|Refund| IssueRefund[Process Refund]
+    AdminPaymentAction -->|Generate Report| GenerateReport[Export CSV/PDF Report]
 
-    AdminSees --> AdminDecision{Admin<br/>Action?}
-    AdminDecision -->|Decline| EnterDeclineReason[Admin Enters<br/>Decline Reason]
-    EnterDeclineReason --> DeclineRequest[(UPDATE Requests<br/>SET Status = Declined<br/>DeclineReason<br/>DeclinedAt = Now)]
-    DeclineRequest --> NotifyDeclined[📧 Email Customer:<br/>Request Declined]
-    NotifyDeclined --> LogDeclined[(SystemLogs Table<br/>Request Declined<br/>AdminId, Reason)]
-    LogDeclined --> EndDeclined([END: Request Declined])
+    %% ==========================================
+    %% ROBOT SYSTEM FLOW
+    %% ==========================================
+    StartRobot([🤖 START 3: Robot Powers On])
 
-    AdminDecision -->|Accept| AcceptRequest[Admin Clicks Accept]
-    AcceptRequest --> CheckAutoAccept
+    StartRobot --> InitRobot[Initialize Systems:<br/>GPIO Pins<br/>Camera<br/>Bluetooth<br/>Sensors]
 
-    CheckAutoAccept -->|Yes| CheckOtherBusy{Any Other<br/>Active Requests?}
-    CheckOtherBusy -->|Yes| SetPending
-    CheckOtherBusy -->|No| SetAccepted
+    InitRobot --> RegisterRobot[POST /api/robot/register]
+    RegisterRobot --> CheckRegistered{Already<br/>Registered?}
+    CheckRegistered -->|No| CreateRobotDB[(INSERT INTO Robots<br/>Name<br/>IP Address<br/>Status = Available)]
+    CheckRegistered -->|Yes| UpdateRobotDB[(UPDATE Robots<br/>LastPing = Now<br/>IsOffline = false)]
 
-    AcceptRequest --> SetAccepted[(UPDATE Requests<br/>SET Status = Accepted<br/>AcceptedAt = Now)]
+    CreateRobotDB --> RobotReady
+    UpdateRobotDB --> RobotReady[🤖 Robot Ready<br/>Status = Available]
 
-    %% Navigation Target Setup
-    SetAccepted --> LogAccepted[(SystemLogs Table<br/>Request Accepted<br/>RobotId, RequestId)]
-    LogAccepted --> GetCustomerBeacon[Query: Get Customer's<br/>Assigned Beacon]
+    RobotReady --> StartDataExchange[Start Data Exchange Loop<br/>Every 1 Second]
 
-    GetCustomerBeacon --> HasBeacon{Customer Has<br/>Beacon?}
-    HasBeacon -->|No| ErrorNoBeacon[❌ Error: No Beacon Assigned<br/>Admin Must Configure]
-    ErrorNoBeacon --> CancelRequest
+    StartDataExchange --> CollectSensorData[Collect Sensor Data:<br/>Camera - Line Position<br/>Weight - HX711 Reading<br/>Ultrasonic - Distance<br/>Bluetooth - Beacon Scan]
 
-    HasBeacon -->|Yes| GetBeaconDetails[(Query Beacons Table<br/>Get MAC, Room, Threshold)]
-    GetBeaconDetails --> SetNavTarget[Set Beacon as<br/>NavigationTarget = true]
+    CollectSensorData --> BuildPayload[Build JSON Payload:<br/>RobotName<br/>DetectedBeacons RSSI<br/>Weight in kg<br/>UltrasonicDistance<br/>IsInTarget boolean<br/>Timestamp]
 
-    %% Robot Data Exchange (Continuous Loop)
-    SetNavTarget --> RobotPolling[🤖 Robot Data Exchange<br/>POST /api/robot/NAME/data-exchange<br/>Every 1 Second]
+    BuildPayload --> SendDataExchange[POST /api/robot/NAME/data-exchange]
 
-    RobotPolling --> RobotSendsData[Robot Sends:<br/>- Detected Beacons array<br/>- Weight in kg<br/>- UltrasonicDistance<br/>- IsInTarget boolean<br/>- Timestamp]
+    %% ==========================================
+    %% CONVERGENCE POINT - REQUEST PROCESSING
+    %% ==========================================
+    LogRequestCreated --> TriggerQueue[⚙️ Background Queue Processor]
 
-    RobotSendsData --> ServerProcesses[Server Processes Data]
-    ServerProcesses --> CheckArrivalFlag{IsInTarget<br/>= true?}
+    TriggerQueue --> GetAvailableRobots[Query Robots Table:<br/>WHERE Status = Available<br/>AND IsOffline = false]
 
-    CheckArrivalFlag -->|No| ServerResponds[Server Responds:<br/>- ActiveBeacons config<br/>- IsLineFollowing = true<br/>- FollowColor<br/>- NavigationTargets]
+    GetAvailableRobots --> AnyRobots{Robots<br/>Available?}
+    AnyRobots -->|No| QueuePending[Request Stays Pending<br/>Wait for Robot or Admin]
 
-    ServerResponds --> RobotReceives[Robot Receives Config]
-    RobotReceives --> RobotExecutes[🤖 Robot Actions:<br/>1. Start Line Following<br/>2. Apply PID Control<br/>3. Scan for Beacons<br/>4. Check RSSI Thresholds]
+    AnyRobots -->|Yes| SelectRobot[Select First Available Robot]
+    SelectRobot --> AssignRobotDB[(UPDATE Requests<br/>SET AssignedRobotName<br/>UPDATE Robots<br/>SET Status = Busy)]
 
-    RobotExecutes --> CameraReads[📷 Camera: Capture Frame<br/>Detect Line Position]
-    CameraReads --> PIDCalc[PID Controller:<br/>Calculate Motor Output<br/>Error Correction]
-    PIDCalc --> MotorControl[🎛️ Motor Driver:<br/>Adjust Speed/Direction]
+    AssignRobotDB --> CheckAutoAccept{Auto-Accept<br/>Enabled?}
+    CheckAutoAccept -->|No| WaitAdminApproval[Status = Pending<br/>Wait for Admin Approval]
 
-    MotorControl --> BeaconScan[📡 Bluetooth: Scan BLE<br/>Detect Beacons<br/>Measure RSSI]
-    BeaconScan --> CheckBeaconRSSI{Target Beacon<br/>RSSI >= Threshold?}
+    WaitAdminApproval --> AdminSelectReq
 
-    CheckBeaconRSSI -->|No| ContinueNav[Continue Navigation<br/>Follow Line]
-    ContinueNav --> WaitNextPoll[⏱️ Wait 1 Second]
-    WaitNextPoll --> RobotPolling
+    AcceptRequest --> SetAccepted[(UPDATE Requests<br/>SET Status = Accepted)]
+    DeclineRequest --> SetDeclined[(UPDATE Requests<br/>SET Status = Declined)]
+    SetDeclined --> NotifyDeclined[📧 Notify Customer]
 
-    %% Robot Arrives at Customer Room
-    CheckBeaconRSSI -->|Yes| SetIsInTarget[Robot Sets:<br/>IsInTarget = true]
-    SetIsInTarget --> RobotPolling
+    CheckAutoAccept -->|Yes| SetAccepted
 
-    CheckArrivalFlag -->|Yes| GetRequestStatus[Get Current<br/>Request Status]
-    GetRequestStatus --> CheckStatus{Request<br/>Status?}
+    SetAccepted --> GetCustomerBeacon[Query Beacons Table:<br/>Customer Assigned Beacon]
+    GetCustomerBeacon --> SetNavTarget[(UPDATE Beacons<br/>SET IsNavigationTarget = true)]
 
-    CheckStatus -->|Accepted| ArrivedAtRoom[(UPDATE Requests<br/>SET Status = ArrivedAtRoom<br/>ArrivedAt = Now)]
-    ArrivedAtRoom --> StopLineFollow[Server Responds:<br/>IsLineFollowing = false]
-    StopLineFollow --> RobotStops[🤖 Robot Stops<br/>🔊 Buzzer: Alert Customer]
+    %% ==========================================
+    %% ROBOT RECEIVES COMMANDS
+    %% ==========================================
+    SendDataExchange --> ServerProcesses[Server Processes Request]
+    ServerProcesses --> GetRobotRequest[Get Active Request<br/>for This Robot]
 
-    RobotStops --> NotifyArrived[📧 Push Notification:<br/>'Robot has arrived!<br/>Please load laundry']
-    NotifyArrived --> LogArrival[(SystemLogs Table<br/>Robot Arrived<br/>RequestId, Location)]
+    GetRobotRequest --> HasRequest{Has Active<br/>Request?}
+    HasRequest -->|No| ServerRespondsIdle[Respond:<br/>IsLineFollowing = false<br/>No Targets]
 
-    LogArrival --> CustomerOpensApp[👤 Customer Opens App<br/>Sees 'Robot Waiting']
-    CustomerOpensApp --> WeightMonitor[⚖️ Weight Sensor<br/>Continuous Reading<br/>HX711 Load Cell]
+    HasRequest -->|Yes| GetRequestStatus[Get Request Status]
+    GetRequestStatus --> DetermineTarget{Request<br/>Status?}
 
-    WeightMonitor --> CustomerLoads[Customer Loads Laundry<br/>into Robot Basket]
-    CustomerLoads --> WeightIncreases[Weight Increases:<br/>Reading > Min Threshold]
+    DetermineTarget -->|Accepted| TargetCustomer[Target: Customer Beacon]
+    DetermineTarget -->|LaundryLoaded| TargetBase1[Target: Base Beacon]
+    DetermineTarget -->|FinishedWashingGoingToRoom| TargetCustomer
+    DetermineTarget -->|FinishedWashingGoingToBase| TargetBase1
+
+    TargetCustomer --> SendNavConfig[Respond:<br/>IsLineFollowing = true<br/>ActiveBeacons<br/>NavigationTarget = Customer]
+    TargetBase1 --> SendBaseConfig[Respond:<br/>IsLineFollowing = true<br/>ActiveBeacons<br/>NavigationTarget = Base]
+
+    SendNavConfig --> RobotExecutes
+    SendBaseConfig --> RobotExecutes
+    ServerRespondsIdle --> RobotWaits[Robot Idles<br/>No Action]
+
+    RobotExecutes[🤖 Robot Executes Commands]
+    RobotExecutes --> StartLineFollow[Start Line Following:<br/>PID Controller Active]
+
+    StartLineFollow --> CameraCapture[📷 Camera Captures Frame]
+    CameraCapture --> DetectLine[Detect Line Position<br/>Calculate Error]
+    DetectLine --> PIDControl[PID Controller:<br/>P = Kp × Error<br/>I = Ki × Integral<br/>D = Kd × Derivative]
+
+    PIDControl --> MotorControl[🎛️ Motor Control:<br/>Adjust Left/Right Speed<br/>Based on PID Output]
+
+    MotorControl --> BeaconScan[📡 Bluetooth Scan BLE<br/>Detect Beacons<br/>Measure RSSI]
+
+    BeaconScan --> CheckRSSI{Target Beacon<br/>RSSI >= Threshold?}
+    CheckRSSI -->|No| ContinueNav[Continue Navigation]
+    ContinueNav --> Wait1Sec[⏱️ Wait 1 Second]
+    Wait1Sec --> CollectSensorData
+
+    CheckRSSI -->|Yes| SetIsInTarget[Set IsInTarget = true]
+    SetIsInTarget --> SendDataExchange
+
+    SendDataExchange --> CheckArrival{IsInTarget<br/>= true?}
+    CheckArrival -->|No| SendNavConfig
+
+    CheckArrival -->|Yes| ProcessArrival[Process Arrival Event]
+    ProcessArrival --> CheckArrivalStatus{Request<br/>Status?}
+
+    CheckArrivalStatus -->|Accepted| UpdateArrivedAtRoom[(UPDATE Requests<br/>SET Status = ArrivedAtRoom<br/>StopLineFollowing)]
+    CheckArrivalStatus -->|LaundryLoaded| UpdateWashing[(UPDATE Requests<br/>SET Status = Washing<br/>Robot Available)]
+    CheckArrivalStatus -->|FinishedWashingGoingToRoom| UpdateArrivedDelivery[(UPDATE Requests<br/>SET Status = FinishedWashingArrivedAtRoom)]
+    CheckArrivalStatus -->|FinishedWashingGoingToBase| UpdateCompleted[(UPDATE Requests<br/>SET Status = Completed<br/>Robot Available)]
+
+    %% ==========================================
+    %% CUSTOMER INTERACTION AT ROBOT
+    %% ==========================================
+    UpdateArrivedAtRoom --> StopRobot[🤖 Robot Stops<br/>🔊 Buzzer Alert]
+    StopRobot --> NotifyArrived[📧 Push Notification:<br/>Robot Arrived]
+    NotifyArrived --> LogArrival[(SystemLogs<br/>Arrival)]
+
+    LogArrival --> ViewStatus
+    ViewStatus --> SeeWaiting[See Robot Waiting<br/>Weight Sensor Active]
+
+    SeeWaiting --> CustomerLoads[Customer Loads Laundry]
+    CustomerLoads --> WeightIncreases[⚖️ Weight Increases]
 
     WeightIncreases --> CheckWeight{Weight ><br/>0.5 kg?}
-    CheckWeight -->|No| WaitLoad[⏳ Wait for Loading<br/>Timeout: 10 minutes]
-    WaitLoad --> CheckTimeout1{Timeout<br/>Exceeded?}
-    CheckTimeout1 -->|Yes| TimeoutCancel[⏰ Timeout!<br/>Auto-Cancel Request]
-    TimeoutCancel --> CancelRequest
-    CheckTimeout1 -->|No| WeightMonitor
-
+    CheckWeight -->|No| WaitLoad[Wait for Loading<br/>10 min Timeout]
     CheckWeight -->|Yes| CheckMaxWeight{Weight <<br/>Max 50kg?}
-    CheckMaxWeight -->|No| OverweightAlert[❌ Overweight!<br/>Alert Customer]
-    OverweightAlert --> WeightMonitor
+    CheckMaxWeight -->|No| OverweightAlert[❌ Overweight Alert]
+    OverweightAlert --> CustomerLoads
 
-    CheckMaxWeight -->|Yes| EnableConfirm[✅ Enable<br/>'Confirm Loaded' Button]
-    EnableConfirm --> CustomerConfirms[Customer Clicks<br/>'Confirm Loaded']
+    CheckMaxWeight -->|Yes| EnableConfirm[✅ Enable Confirm Button]
+    EnableConfirm --> CustomerConfirms[Customer Clicks<br/>Confirm Loaded]
 
     CustomerConfirms --> RecordWeight[POST /api/requests/ID/confirm-loaded]
-    RecordWeight --> CalcCost[Calculate Cost:<br/>TotalCost = Weight × RatePerKg<br/>Default: ₱50/kg]
+    RecordWeight --> CalcCost[Calculate Cost:<br/>Weight × ₱50 per kg]
 
-    CalcCost --> UpdateLoaded[(UPDATE Requests<br/>SET Status = LaundryLoaded<br/>Weight = weight<br/>TotalCost = cost<br/>LoadedAt = Now)]
+    CalcCost --> UpdateLoaded[(UPDATE Requests<br/>SET Status = LaundryLoaded<br/>Weight = weight<br/>TotalCost = cost)]
 
-    UpdateLoaded --> LogLoaded[(SystemLogs Table<br/>Laundry Loaded<br/>Weight, Cost)]
+    UpdateLoaded --> LogLoaded[(SystemLogs<br/>Laundry Loaded)]
+    LogLoaded --> SetNavTarget
 
-    %% Return to Base
-    LogLoaded --> SetBaseTarget[Set Base Beacon as<br/>NavigationTarget]
-    SetBaseTarget --> RobotPolling2[🤖 Robot Data Exchange<br/>Continues Every 1s]
+    %% ==========================================
+    %% WASHING PROCESS
+    %% ==========================================
+    UpdateWashing --> RobotAvailable[🤖 Robot Status = Available<br/>Process Next Queue]
+    RobotAvailable --> NotifyWashing[📧 Notify Customer:<br/>Washing in Progress]
+    NotifyWashing --> LogWashing[(SystemLogs<br/>Washing Started)]
 
-    RobotPolling2 --> ServerSendsBase[Server Responds:<br/>IsLineFollowing = true<br/>NavigationTarget = Base Beacon]
-    ServerSendsBase --> RobotReturns[🤖 Robot Navigates<br/>Back to Base<br/>Line Following Active]
+    LogWashing --> AdminWashes[👨‍💼 Admin Physically Washes]
+    AdminWashes --> AdminSelectReq
 
-    RobotReturns --> BeaconScanBase[📡 Scan for Base Beacon]
-    BeaconScanBase --> CheckBaseRSSI{Base Beacon<br/>RSSI >= Threshold?}
+    MarkWashingDone --> UpdateFinished[(UPDATE Requests<br/>SET Status = FinishedWashing)]
+    UpdateFinished --> LogFinished[(SystemLogs<br/>Washing Completed)]
 
-    CheckBaseRSSI -->|No| ContinueReturn[Continue to Base<br/>Follow Line]
-    ContinueReturn --> WaitPoll2[⏱️ Wait 1 Second]
-    WaitPoll2 --> RobotPolling2
+    LogFinished --> AdminSelectReq
 
-    CheckBaseRSSI -->|Yes| RobotAtBase[Robot Sets:<br/>IsInTarget = true]
-    RobotAtBase --> RobotPolling2
+    StartDelivery --> CheckRobotsOnline{Robots<br/>Online?}
+    CheckRobotsOnline -->|No| ErrorNoBots[❌ No Robots Available]
+    CheckRobotsOnline -->|Yes| AssignDeliveryRobot[(UPDATE Requests<br/>SET Status = FinishedWashingGoingToRoom<br/>AssignedRobotName)]
 
-    RobotPolling2 --> CheckStatusBase{Request Status?}
-    CheckStatusBase -->|LaundryLoaded| UpdateWashing[(UPDATE Requests<br/>SET Status = Washing<br/>UPDATE Robots<br/>SET Status = Available)]
+    AssignDeliveryRobot --> LogDeliveryStart[(SystemLogs<br/>Delivery Started)]
+    LogDeliveryStart --> SetNavTarget
 
-    UpdateWashing --> RobotAvailable[🤖 Robot Now Available<br/>Can Accept New Requests]
-    RobotAvailable --> ProcessNextQueue[⚙️ Queue Processor:<br/>Check for Pending Requests]
+    %% ==========================================
+    %% DELIVERY AND UNLOADING
+    %% ==========================================
+    UpdateArrivedDelivery --> StopDelivery[🤖 Robot Stops<br/>🔊 Buzzer Alert]
+    StopDelivery --> NotifyDeliveryArrived[📧 Push Notification:<br/>Clean Laundry Arrived]
+    NotifyDeliveryArrived --> LogDeliveryArrival[(SystemLogs<br/>Delivery Arrival)]
 
-    ProcessNextQueue --> NotifyWashing[📧 Notification:<br/>'Laundry is being washed']
-    NotifyWashing --> LogWashing[(SystemLogs Table<br/>Washing Started<br/>RobotId, RequestId)]
-
-    %% Admin Washing Process
-    LogWashing --> AdminWashes[👨‍💼 Admin Physically<br/>Washes Laundry]
-    AdminWashes --> AdminOpensDash[Admin Opens Dashboard<br/>Sees 'Washing' Requests]
-
-    AdminOpensDash --> AdminFinishes[Admin Finishes Washing<br/>Clicks 'Mark Done']
-    AdminFinishes --> MarkDone[POST /api/requests/ID/mark-washing-done]
-
-    MarkDone --> UpdateFinished[(UPDATE Requests<br/>SET Status = FinishedWashing<br/>FinishedWashingAt = Now)]
-    UpdateFinished --> LogFinished[(SystemLogs Table<br/>Washing Completed)]
-
-    LogFinished --> AdminStartsDelivery[Admin Clicks<br/>'Start Delivery']
-    AdminStartsDelivery --> CheckRobotsOnline{Any Robots<br/>Online?}
-
-    CheckRobotsOnline -->|No| ErrorNoBots[❌ Error: No Robots Available<br/>Cannot Start Delivery]
-    ErrorNoBots --> WaitForRobot[⏳ Wait for Robot<br/>to Come Online]
-
-    CheckRobotsOnline -->|Yes| FindDeliveryRobot[Find Available Robot<br/>or Assign Least Busy]
-    FindDeliveryRobot --> AssignDelivery[(UPDATE Requests<br/>SET Status = FinishedWashingGoingToRoom<br/>AssignedRobotName)]
-
-    AssignDelivery --> LogDeliveryStart[(SystemLogs Table<br/>Delivery Started<br/>RobotId)]
-
-    %% Delivery Navigation
-    LogDeliveryStart --> SetCustomerBeacon[Set Customer Beacon<br/>as NavigationTarget]
-    SetCustomerBeacon --> RobotPolling3[🤖 Robot Data Exchange<br/>Every 1 Second]
-
-    RobotPolling3 --> ServerSendsCustomer[Server Responds:<br/>IsLineFollowing = true<br/>NavigationTarget = Customer Beacon]
-    ServerSendsCustomer --> RobotDelivers[🤖 Robot Navigates<br/>to Customer Room<br/>Carrying Clean Laundry]
-
-    RobotDelivers --> BeaconScanCustomer[📡 Scan for Customer Beacon]
-    BeaconScanCustomer --> CheckCustomerRSSI{Customer Beacon<br/>RSSI >= Threshold?}
-
-    CheckCustomerRSSI -->|No| ContinueDelivery[Continue Navigation<br/>Follow Line]
-    ContinueDelivery --> WaitPoll3[⏱️ Wait 1 Second]
-    WaitPoll3 --> RobotPolling3
-
-    CheckCustomerRSSI -->|Yes| RobotArrivedDelivery[Robot Sets:<br/>IsInTarget = true]
-    RobotArrivedDelivery --> RobotPolling3
-
-    RobotPolling3 --> CheckStatusDelivery{Request Status?}
-    CheckStatusDelivery -->|FinishedWashingGoingToRoom| ArrivedForDelivery[(UPDATE Requests<br/>SET Status = FinishedWashingArrivedAtRoom<br/>ArrivedForDeliveryAt = Now)]
-
-    ArrivedForDelivery --> RobotStopsDelivery[🤖 Robot Stops<br/>🔊 Buzzer: Alert]
-    RobotStopsDelivery --> NotifyDeliveryArrived[📧 Push Notification:<br/>'Clean laundry arrived!<br/>Please unload']
-
-    NotifyDeliveryArrived --> LogDeliveryArrival[(SystemLogs Table<br/>Delivery Arrival)]
-
-    %% Customer Unloads
-    LogDeliveryArrival --> CustomerOpensApp2[👤 Customer Opens App<br/>Sees 'Unload Laundry']
-    CustomerOpensApp2 --> WeightMonitorUnload[⚖️ Weight Sensor<br/>Monitoring]
-
-    WeightMonitorUnload --> CustomerUnloads[Customer Unloads<br/>Clean Laundry]
-    CustomerUnloads --> WeightDecreases[Weight Decreases:<br/>Reading < Min Threshold]
+    LogDeliveryArrival --> CustomerUnloads[Customer Unloads Laundry]
+    CustomerUnloads --> WeightDecreases[⚖️ Weight Decreases]
 
     WeightDecreases --> CheckUnloadWeight{Weight <<br/>0.5 kg?}
-    CheckUnloadWeight -->|No| WaitUnload[⏳ Wait for Unloading<br/>Timeout: 10 minutes]
-    WaitUnload --> CheckTimeout2{Timeout<br/>Exceeded?}
-    CheckTimeout2 -->|Yes| TimeoutCancelUnload[⏰ Timeout!<br/>Auto-Cancel]
-    TimeoutCancelUnload --> CancelRequest
-    CheckTimeout2 -->|No| WeightMonitorUnload
+    CheckUnloadWeight -->|No| WaitUnload[Wait for Unloading]
+    CheckUnloadWeight -->|Yes| EnableUnloadConfirm[✅ Enable Confirm Button]
 
-    CheckUnloadWeight -->|Yes| EnableUnloadConfirm[✅ Enable<br/>'Confirm Unloaded' Button]
-    EnableUnloadConfirm --> CustomerConfirmsUnload[Customer Clicks<br/>'Confirm Unloaded']
-
+    EnableUnloadConfirm --> CustomerConfirmsUnload[Customer Clicks<br/>Confirm Unloaded]
     CustomerConfirmsUnload --> RecordUnload[POST /api/requests/ID/confirm-unloaded]
-    RecordUnload --> UpdateUnloaded[(UPDATE Requests<br/>SET Status = FinishedWashingGoingToBase<br/>UnloadedAt = Now)]
 
-    UpdateUnloaded --> LogUnloaded[(SystemLogs Table<br/>Laundry Unloaded)]
+    RecordUnload --> UpdateUnloaded[(UPDATE Requests<br/>SET Status = FinishedWashingGoingToBase)]
+    UpdateUnloaded --> LogUnloaded[(SystemLogs<br/>Unloaded)]
+    LogUnloaded --> SetNavTarget
 
-    %% Final Return to Base
-    LogUnloaded --> SetBaseFinal[Set Base Beacon as<br/>NavigationTarget]
-    SetBaseFinal --> RobotPolling4[🤖 Robot Data Exchange<br/>Every 1 Second]
+    %% ==========================================
+    %% COMPLETION AND PAYMENT
+    %% ==========================================
+    UpdateCompleted --> RobotAvailableFinal[🤖 Robot Available Again]
+    RobotAvailableFinal --> NotifyCompleted[📧 Notify Customer:<br/>Service Completed]
+    NotifyCompleted --> LogCompleted[(SystemLogs<br/>Completed)]
 
-    RobotPolling4 --> RobotReturnsFinal[🤖 Robot Returns<br/>to Base<br/>Empty Basket]
-    RobotReturnsFinal --> CheckBaseFinal{Base Beacon<br/>RSSI >= Threshold?}
+    LogCompleted --> CreatePayment[(INSERT INTO Payments<br/>Amount = TotalCost<br/>Status = Pending)]
 
-    CheckBaseFinal -->|No| ContinueFinalReturn[Continue to Base]
-    ContinueFinalReturn --> WaitPoll4[⏱️ Wait 1 Second]
-    WaitPoll4 --> RobotPolling4
+    CreatePayment --> CustomerSeesPayment[Customer Views<br/>Payment Due]
+    CustomerSeesPayment --> CustomerActions
 
-    CheckBaseFinal -->|Yes| RobotAtBaseFinal[Robot Sets:<br/>IsInTarget = true]
-    RobotAtBaseFinal --> RobotPolling4
+    ViewReceipt --> FetchReceipt[GET /api/requests/ID/receipt]
+    FetchReceipt --> DisplayReceipt[Display Receipt:<br/>Number RCP-YYYY-NNNNNN<br/>Weight kg<br/>Rate ₱50/kg<br/>Total amount]
 
-    RobotPolling4 --> UpdateCompleted[(UPDATE Requests<br/>SET Status = Completed<br/>CompletedAt = Now<br/>UPDATE Robots<br/>SET Status = Available)]
+    %% Admin Payment Processing
+    MarkPaid --> UpdatePaymentPaid[(UPDATE Payments<br/>SET Status = Completed<br/>Method = Cash or GCash)]
 
-    UpdateCompleted --> RobotAvailableFinal[🤖 Robot Available<br/>for Next Request]
-    RobotAvailableFinal --> ProcessQueueFinal[⚙️ Queue Processor:<br/>Process Next Pending]
+    UpdatePaymentPaid --> CreateAdjustment[(INSERT INTO PaymentAdjustments<br/>Type = CompletePayment<br/>Amount = amount)]
 
-    ProcessQueueFinal --> NotifyCompleted[📧 Notification:<br/>'Service Completed!<br/>Please proceed to payment']
-    NotifyCompleted --> LogCompleted[(SystemLogs Table<br/>Request Completed<br/>Duration, Cost)]
+    CreateAdjustment --> LogPayment[(SystemLogs<br/>Payment Completed)]
 
-    %% Payment Processing
-    LogCompleted --> CreatePayment[(INSERT INTO Payments<br/>LaundryRequestId<br/>Amount = TotalCost<br/>Status = Pending<br/>CreatedAt = Now)]
+    LogPayment --> CalcRevenue[💰 Calculate Revenue:<br/>SUM Completed - Refunds<br/>+ Adjustments - Expenses]
 
-    CreatePayment --> CustomerSeesPayment[👤 Customer Opens App<br/>Sees Payment Due]
-    CustomerSeesPayment --> AdminPaymentDash[👨‍💼 Admin Opens<br/>Accounting Dashboard]
+    CalcRevenue --> UpdateMetrics[Update Dashboard Metrics]
 
-    AdminPaymentDash --> ShowMetrics[📊 Display Metrics:<br/>- Total Revenue<br/>- Outstanding Payments<br/>- Completed Payments<br/>- Pending Requests]
+    IssueRefund --> ProcessRefund[(UPDATE Payments<br/>SET Status = Refunded<br/>RefundAmount)]
+    ProcessRefund --> LogRefund[(SystemLogs<br/>Refund Processed)]
 
-    ShowMetrics --> AdminSelectsPayment[Admin Selects<br/>Pending Payment]
-    AdminSelectsPayment --> AdminPaymentAction{Admin<br/>Action?}
+    GenerateReport --> SelectPeriod[Select Period:<br/>Today/Week/Month/Custom]
+    SelectPeriod --> QueryReports[(Query Payments<br/>JOIN Requests<br/>GROUP BY Customer and Method)]
+    QueryReports --> ExportReport[Export CSV or PDF]
 
-    AdminPaymentAction -->|Mark as Paid| SelectMethod[Select Payment Method:<br/>- Cash<br/>- GCash]
-    SelectMethod --> RecordPayment[POST /api/payment/ID/mark-paid]
-
-    RecordPayment --> UpdatePaymentPaid[(UPDATE Payments<br/>SET Status = Completed<br/>Method = Cash or GCash<br/>CompletedAt = Now)]
-
-    UpdatePaymentPaid --> CreateAdjustment[(INSERT INTO PaymentAdjustments<br/>Type = CompletePayment<br/>Amount = amount<br/>Description<br/>CreatedAt = Now)]
-
-    CreateAdjustment --> LogPayment[(SystemLogs Table<br/>Payment Completed<br/>Method, Amount)]
-
-    LogPayment --> CalcRevenue[💰 Calculate Total Revenue:<br/>SUM Completed Payments<br/>- SUM Refunds<br/>+ SUM AddRevenue Adjustments<br/>- SUM Expenses]
-
-    CalcRevenue --> UpdateDashboard[Update Accounting Dashboard<br/>Real-time Metrics]
-
-    UpdateDashboard --> GenerateReceipt[📄 Generate Receipt:<br/>Number: RCP-YYYY-NNNNNN<br/>Customer: Name<br/>Weight: kg<br/>Rate: ₱50/kg<br/>Total: ₱amount<br/>Method: method<br/>Date: date]
-
-    GenerateReceipt --> CustomerViewReceipt[👤 Customer Opens<br/>'View Receipt']
-    CustomerViewReceipt --> DisplayReceipt[📱 Display Receipt:<br/>Printable Format<br/>Share Option]
-
-    %% Admin Reporting
-    DisplayReceipt --> AdminReporting{Admin Generate<br/>Report?}
-    AdminReporting -->|Yes| SelectPeriod[Select Period:<br/>- Today<br/>- This Week<br/>- This Month<br/>- Custom Range]
-
-    SelectPeriod --> QueryReports[(Query Database:<br/>Filter Payments by Date<br/>JOIN Requests<br/>GROUP BY Customer and Method)]
-
-    QueryReports --> GenerateReport[📊 Generate Sales Report:<br/>- Revenue by Method<br/>- Top Customers<br/>- Transaction Count<br/>- Average Transaction<br/>- Daily/Weekly Trends]
-
-    GenerateReport --> ExportChoice{Export<br/>Format?}
-    ExportChoice -->|CSV| ExportCSV[💾 Download CSV File<br/>Excel Compatible]
-    ExportChoice -->|PDF| ExportPDF[💾 Download PDF Report<br/>Print Ready]
-    ExportChoice -->|View| DisplayHTML[🖥️ Display in Browser<br/>Interactive Charts]
-
-    ExportCSV --> EndPayment
-    ExportPDF --> EndPayment
-    DisplayHTML --> EndPayment
-    AdminReporting -->|No| EndPayment
-
-    EndPayment([✅ END: Request Complete<br/>Payment Recorded<br/>Customer Satisfied])
-
-    %% Messaging System (Parallel Process)
-    Dashboard -.->|Customer Needs Help| OpenMessages[📧 Open Messages]
+    %% ==========================================
+    %% MESSAGING SYSTEM
+    %% ==========================================
     OpenMessages --> LoadConversation[GET /api/messages/conversation]
-    LoadConversation --> DisplayMessages[Display Message Thread<br/>Previous Messages]
+    LoadConversation --> DisplayMessages[Display Chat History]
 
-    DisplayMessages --> CustomerSendsMsg[Customer Types Message<br/>Optional: Attach Image]
+    DisplayMessages --> CustomerSendsMsg[Customer Types Message<br/>Optional: Image]
     CustomerSendsMsg --> SendMessage[POST /api/messages/send]
 
-    SendMessage --> SaveMessage[(INSERT INTO Messages<br/>FromCustomerId<br/>Content<br/>ImagePath if attached<br/>IsReadByAdmin = false<br/>CreatedAt = Now)]
+    SendMessage --> SaveMessage[(INSERT INTO Messages<br/>FromCustomerId<br/>Content<br/>ImagePath if attached)]
 
-    SaveMessage --> NotifyAdmin[📧 Email Admin:<br/>New Customer Message]
-    NotifyAdmin --> AdminOpensMessages[👨‍💼 Admin Opens<br/>Message Center]
+    SaveMessage --> NotifyAdmin[📧 Email Admin:<br/>New Message]
+    NotifyAdmin --> AdminMenus
 
-    AdminOpensMessages --> ShowConversations[Show All Conversations<br/>Unread Count Badge]
-    ShowConversations --> AdminSelectsConvo[Admin Selects<br/>Customer Conversation]
+    MessageCenter --> ShowConversations[Show All Conversations<br/>Unread Count Badges]
+    ShowConversations --> AdminSelectsConvo[Admin Selects Customer]
 
-    AdminSelectsConvo --> MarkAsRead[(UPDATE Messages<br/>SET IsReadByAdmin = true<br/>WHERE CustomerId = id)]
-
-    MarkAsRead --> AdminResponds[Admin Types Response<br/>Optional: Attach Image]
+    AdminSelectsConvo --> MarkAsRead[(UPDATE Messages<br/>SET IsReadByAdmin = true)]
+    MarkAsRead --> AdminResponds[Admin Types Response]
     AdminResponds --> SendAdminMsg[POST /api/messages/send]
 
-    SendAdminMsg --> SaveAdminMsg[(INSERT INTO Messages<br/>FromAdminId<br/>ToCustomerId<br/>Content<br/>ImagePath<br/>CreatedAt = Now)]
+    SendAdminMsg --> SaveAdminMsg[(INSERT INTO Messages<br/>FromAdminId<br/>ToCustomerId)]
+    SaveAdminMsg --> NotifyCustomerMsg[📧 Notify Customer]
+    NotifyCustomerMsg --> LogMessage[(SystemLogs<br/>Message Exchange)]
 
-    SaveAdminMsg --> NotifyCustomerMsg[📧 Push Notification:<br/>Admin Replied]
-    NotifyCustomerMsg --> LogMessage[(SystemLogs Table<br/>Message Exchange)]
+    %% ==========================================
+    %% ROBOT CONTROLS FROM ADMIN
+    %% ==========================================
+    EmergencyStop --> SetEmergencyFlag[(UPDATE Robots<br/>SET EmergencyStop = true)]
+    SetEmergencyFlag --> SendDataExchange
 
-    LogMessage -.-> Dashboard
+    SendDataExchange --> CheckEmergency{EmergencyStop<br/>Flag?}
+    CheckEmergency -->|Yes| StopAllMotors[🤖 Stop All Motors<br/>Halt Operations]
+    CheckEmergency -->|No| ServerProcesses
 
-    %% Cancellation Flow (Parallel Process)
-    Dashboard -.->|Customer Cancels| CancelRequest[Customer Clicks<br/>'Cancel Request']
-    WaitAdminApproval -.->|Admin Cancels| CancelRequest
+    MaintenanceMode --> SetMaintenanceFlag[(UPDATE Robots<br/>SET MaintenanceMode = true)]
+    SetMaintenanceFlag --> SendDataExchange
 
-    CancelRequest --> ConfirmCancel{Confirm<br/>Cancellation?}
-    ConfirmCancel -->|No| Dashboard
-    ConfirmCancel -->|Yes| GetCancelStatus[Get Current<br/>Request Status]
+    ViewCamera --> FetchCameraFeed[GET /api/robot/NAME/camera]
+    FetchCameraFeed --> StreamVideo[Stream Live Video<br/>from Robot Camera]
 
-    GetCancelStatus --> CancelStatusCheck{Status?}
+    %% ==========================================
+    %% BACKGROUND SERVICES
+    %% ==========================================
+    QueuePending --> TimeoutMonitor[⚙️ Timeout Monitor<br/>Every 10 Seconds]
+    TimeoutMonitor --> CheckTimeouts{Check All<br/>Active Requests}
+    CheckTimeouts --> FindTimedOut[Find Requests<br/>Exceeding Time Limits]
+    FindTimedOut --> AutoCancel[(UPDATE Requests<br/>SET Status = Cancelled<br/>Reason = Timeout)]
+    AutoCancel --> LogTimeout[(SystemLogs<br/>Timeout Cancellation)]
 
-    CancelStatusCheck -->|Pending| SimpleCancelDB[(UPDATE Requests<br/>SET Status = Cancelled<br/>CancelledAt = Now)]
-    SimpleCancelDB --> LogCancel
+    RobotWaits --> OfflineDetector[⚙️ Offline Detector<br/>Every 30 Seconds]
+    OfflineDetector --> CheckLastPing{LastPing ><br/>90 seconds?}
+    CheckLastPing -->|Yes| MarkOffline[(UPDATE Robots<br/>SET IsOffline = true)]
+    MarkOffline --> ReassignRequests[Reassign Active Requests<br/>to Other Robots]
+    ReassignRequests --> AlertAdmin[🚨 Alert Admin:<br/>Robot Offline]
+    AlertAdmin --> LogOffline[(SystemLogs<br/>Robot Offline)]
 
-    CancelStatusCheck -->|Accepted/ArrivedAtRoom/LaundryLoaded| SendRobotBack[(UPDATE Requests<br/>SET Status = Cancelled<br/>SET NavigationTarget = Base)]
-    SendRobotBack --> RobotReturnsCancel[🤖 Robot Returns to Base<br/>Cancel Navigation]
-    RobotReturnsCancel --> LogCancel
+    %% ==========================================
+    %% BEACON MANAGEMENT
+    %% ==========================================
+    BeaconConfig --> ShowBeacons[Display All Beacons:<br/>MAC Address<br/>Assigned Room<br/>RSSI Threshold]
+    ShowBeacons --> AdminBeaconAction{Beacon<br/>Action?}
+    AdminBeaconAction -->|Add New| CreateBeacon[Add New Beacon]
+    AdminBeaconAction -->|Edit| EditBeacon[Edit Configuration]
+    AdminBeaconAction -->|Delete| DeleteBeacon[Remove Beacon]
 
-    CancelStatusCheck -->|Washing/FinishedWashing| AdminIntervention[❌ Cannot Auto-Cancel<br/>Require Admin Action]
-    AdminIntervention --> AdminHandlesCancel[Admin Manually<br/>Resolves Cancellation]
-    AdminHandlesCancel --> LogCancel
+    CreateBeacon --> InsertBeacon[(INSERT INTO Beacons<br/>MAC Address<br/>RoomName<br/>Threshold)]
+    EditBeacon --> UpdateBeacon[(UPDATE Beacons)]
+    DeleteBeacon --> RemoveBeacon[(DELETE FROM Beacons)]
 
-    LogCancel[(SystemLogs Table<br/>Request Cancelled<br/>Reason, Timestamp)]
-    LogCancel --> ProcessRefund[💰 Process Refund<br/>if Payment Made]
-    ProcessRefund --> NotifyCancelled[📧 Notification:<br/>Request Cancelled]
-    NotifyCancelled --> EndCancelled([END: Request Cancelled])
+    InsertBeacon --> LogBeaconChange[(SystemLogs<br/>Beacon Created)]
+    UpdateBeacon --> LogBeaconChange
+    RemoveBeacon --> LogBeaconChange
 
-    %% Offline Robot Handling (Background Service)
-    RobotPolling -.->|No Response| OfflineDetector[⚙️ Offline Detector Service<br/>Checks Every 30s]
-    OfflineDetector --> CheckLastPing{LastPing ><br/>90 Seconds?}
+    %% ==========================================
+    %% SYSTEM SETTINGS
+    %% ==========================================
+    SystemSettings --> ShowSettings[Display Settings:<br/>Auto-Accept Enabled<br/>Rate Per Kg<br/>Timeout Durations]
+    ShowSettings --> AdminEditSettings[Admin Modifies Settings]
+    AdminEditSettings --> SaveSettings[(UPDATE SystemSettings)]
+    SaveSettings --> LogSettingsChange[(SystemLogs<br/>Settings Modified)]
 
-    CheckLastPing -->|Yes| MarkOffline[(UPDATE Robots<br/>SET IsOffline = true<br/>Status = Offline)]
-
-    MarkOffline --> GetAssignedReq[Get Robot's<br/>Active Request]
-    GetAssignedReq --> HasAssigned{Has Active<br/>Request?}
-
-    HasAssigned -->|Yes| ReassignOrCancel[Reassign to Another Robot<br/>OR Cancel Request]
-    HasAssigned -->|No| LogOffline
-
-    ReassignOrCancel --> NotifyOffline[📧 Alert Admin:<br/>Robot Offline]
-    NotifyOffline --> LogOffline[(SystemLogs Table<br/>Robot Offline<br/>Critical Alert)]
-
-    LogOffline --> WaitReconnect[⏳ Monitor for Reconnection]
-    CheckLastPing -->|No| RobotHealthy[Robot Healthy<br/>Continue Monitoring]
-
-    %% Styling
+    %% ==========================================
+    %% STYLING
+    %% ==========================================
     classDef customer fill:#A8D5BA,stroke:#5A9279,stroke-width:3px,color:#2C4A3A
     classDef admin fill:#F4D19B,stroke:#D4A574,stroke-width:3px,color:#6B4E2A
     classDef robot fill:#6B9AC4,stroke:#3D5A80,stroke-width:3px,color:#1E3A5F
     classDef database fill:#B8A4C9,stroke:#9181A8,stroke-width:2px,color:#4A3E5A
     classDef api fill:#A4C5A8,stroke:#7A9E7F,stroke-width:2px,color:#3A5A3F
     classDef error fill:#E8A0A0,stroke:#C67373,stroke-width:2px,color:#6B3A3A
-    classDef success fill:#A8D5BA,stroke:#5A9279,stroke-width:2px,color:#2C4A3A
     classDef process fill:#F5B895,stroke:#D49470,stroke-width:2px,color:#6B4830
     classDef log fill:#D4C5E8,stroke:#A89BC4,stroke-width:2px,color:#5A4E7A
 
-    class Start,Dashboard,CustomerOpensApp,CustomerOpensApp2,CustomerSeesPayment,CustomerViewReceipt customer
-    class AdminDashboard,AdminOpensDash,AdminPaymentDash,AdminOpensMessages admin
-    class RobotPolling,RobotPolling2,RobotPolling3,RobotPolling4,RobotExecutes,RobotStops robot
-    class CreateRequestDB,UpdateAssignment,UpdateLoaded,UpdateWashing,UpdateCompleted,CreatePayment,UpdatePaymentPaid,SaveMessage database
-    class LoginAPI,SubmitRequest,RecordWeight,RecordPayment,SendMessage api
-    class LoginFail,RejectDupe,ValidationError,ErrorNoBeacon,OverweightAlert,TimeoutCancel,ErrorNoBots error
-    class EndPayment,EndCancelled,EndDeclined success
-    class TriggerQueue,ProcessNextQueue,OfflineDetector process
-    class LogFailedLogin,LogSuccessLogin,LogRequestCreated,LogAccepted,LogArrival,LogCompleted,LogPayment,LogCancel,LogOffline log
+    class StartCustomer,Dashboard,CustomerActions,CreateRequest,ViewStatus,OpenMessages,ViewReceipt customer
+    class StartAdmin,AdminDashboard,AdminMenus,RequestMgmt,UserMgmt,RobotMgmt,BeaconConfig,AccountingDash,MessageCenter,SystemSettings admin
+    class StartRobot,RobotReady,RobotExecutes,StartLineFollow,MotorControl,BeaconScan robot
+    class CreateRequestDB,AssignRobotDB,UpdateArrivedAtRoom,UpdateWashing,UpdateCompleted,CreatePayment,SaveMessage database
+    class LoginAPI,SubmitRequest,RecordWeight,SendDataExchange,FetchReceipt api
+    class LoginFail,RejectDupe,ValidationError,OverweightAlert,ErrorNoBots error
+    class TriggerQueue,TimeoutMonitor,OfflineDetector process
+    class LogRequestCreated,LogArrival,LogCompleted,LogPayment,LogMessage,LogOffline log
 ```
 
 ---
 
-## Complete System Flow Description
+## Three Independent Starting Points
 
-### Phase 1: Authentication (Lines 1-30)
-**Customer authenticates** → Validates credentials → Generates JWT token → Stores in SecureStorage → Logs successful login → Enters dashboard
+### 🎯 START 1: Customer Mobile App
+**Entry Point:** Customer opens React Native mobile application
+- Authentication with JWT tokens
+- Request creation and management
+- Real-time status tracking
+- Payment and receipt viewing
+- Messaging with admin
 
-**Key Components:**
-- Mobile App authentication screen
-- `/api/auth/login` endpoint
-- Users table validation
-- JWT token generation
-- SystemLogs table (login attempts)
+### ⚙️ START 2: Admin Web Dashboard
+**Entry Point:** Administrator opens ASP.NET Core web dashboard
+- ASP.NET Identity authentication
+- Request approval and management
+- User and robot administration
+- Beacon configuration
+- Financial accounting and reporting
+- Customer support messaging
+- System settings configuration
 
----
-
-### Phase 2: Request Creation (Lines 31-60)
-**Customer creates request** → Validates no duplicate → Submits form → Creates request in database → Triggers queue processor
-
-**Key Components:**
-- Request form validation
-- `/api/requests/create` endpoint
-- Requests table INSERT
-- SystemLogs (request created)
-- Background queue processor triggered
-
----
-
-### Phase 3: Robot Assignment (Lines 61-100)
-**Queue processor finds available robot** → Assigns robot → Checks auto-accept setting → Either accepts immediately or waits for admin approval
-
-**Key Components:**
-- Robot availability query
-- Auto-assignment algorithm
-- Admin approval workflow (if needed)
-- Request status updates
-- Robot status updates (Available → Busy)
+### 🤖 START 3: Robot System
+**Entry Point:** Robot Raspberry Pi boots up
+- Hardware initialization (GPIO, sensors, camera, Bluetooth)
+- Server registration
+- Continuous data exchange loop (1-second interval)
+- Autonomous navigation and task execution
+- Real-time sensor data collection
 
 ---
 
-### Phase 4: Navigation to Customer (Lines 101-150)
-**Robot navigates to customer** → Line following with PID control → Beacon scanning → RSSI threshold detection → Arrival confirmation
+## System Convergence Points
 
-**Key Components:**
-- Beacon navigation target setup
-- Robot data exchange (1-second polling)
-- Line following algorithm
-- BLE beacon scanning
-- Arrival detection (RSSI-based)
-- Weight sensor monitoring
+### 1. Request Processing Queue
+All three actors converge at the request processing system:
+- **Customer** creates request → Database
+- **Admin** approves/declines → Database
+- **Robot** executes task → Database updates
 
----
+### 2. Database (Central Hub)
+All actors read/write to shared database tables:
+- **Requests** table (shared by all)
+- **Robots** table (Admin monitors, Robot updates)
+- **Users** table (Admin manages, Customer authenticates)
+- **Payments** table (Admin processes, Customer views)
+- **Messages** table (bidirectional Customer-Admin)
+- **SystemLogs** table (all events from all actors)
 
-### Phase 5: Laundry Loading (Lines 151-180)
-**Robot arrives** → Customer loads laundry → Weight sensor detects load → Customer confirms → Cost calculated
-
-**Key Components:**
-- Weight sensor (HX711 load cell)
-- Load confirmation endpoint
-- Cost calculation (Weight × RatePerKg)
-- Timeout monitoring
-- Overweight validation
-
----
-
-### Phase 6: Return to Base (Lines 181-210)
-**Robot returns to base** → Navigation with base beacon target → Arrives at base → Status updated to "Washing"
-
-**Key Components:**
-- Base beacon navigation
-- Arrival detection at base
-- Robot status → Available
-- Request status → Washing
-- Queue processor activates (robot now free)
+### 3. Data Exchange API
+Robot communicates with server every 1 second:
+- Sends sensor data
+- Receives navigation commands
+- Updates influenced by Admin actions and Customer confirmations
 
 ---
 
-### Phase 7: Washing Process (Lines 211-240)
-**Admin washes laundry** → Marks washing done → Starts delivery → Robot assigned for delivery
+## Key Interactions Between Actors
 
-**Key Components:**
-- Admin dashboard (washing management)
-- Manual washing confirmation
-- Delivery initiation
-- Robot reassignment for delivery
-
----
-
-### Phase 8: Delivery to Customer (Lines 241-280)
-**Robot navigates back to customer** → Carries clean laundry → Arrives → Customer unloads
-
-**Key Components:**
-- Navigation to customer beacon (again)
-- Delivery arrival notification
-- Weight sensor (unload detection)
-- Unload confirmation
+| Customer Action | Admin Response | Robot Action |
+|----------------|---------------|-------------|
+| Creates request | Approves request | Receives navigation target |
+| Loads laundry | Views washing status | Returns to base |
+| Sends message | Responds to message | N/A |
+| Confirms unload | Marks payment | Returns to base |
+| N/A | Emergency stop | Halts all operations |
+| N/A | Starts delivery | Navigates to customer |
+| Views receipt | Processes payment | N/A |
 
 ---
 
-### Phase 9: Final Return to Base (Lines 281-310)
-**Robot returns to base** → Completes request → Robot becomes available → Request marked completed
+## Data Flow Summary
 
-**Key Components:**
-- Final navigation to base
-- Request completion
-- Robot availability update
-- Queue processor (next request)
-
----
-
-### Phase 10: Payment & Accounting (Lines 311-370)
-**Payment created** → Admin marks as paid → Payment recorded → Revenue calculated → Receipt generated → Reports generated
-
-**Key Components:**
-- Payments table
-- PaymentAdjustments table
-- Revenue calculation
-- Receipt generation
-- Sales reports (CSV/PDF export)
-- Accounting dashboard metrics
-
----
-
-### Phase 11: Messaging System (Lines 371-410, Parallel)
-**Customer sends message** → Admin receives notification → Admin responds → Customer notified
-
-**Key Components:**
-- Messages table
-- Email notifications
-- Image attachments
-- Read receipts
-- Real-time polling
-
----
-
-### Phase 12: Cancellation Handling (Lines 411-450, Parallel)
-**Request cancelled** → Status checked → Robot returned (if needed) → Refund processed → Logged
-
-**Key Components:**
-- Cancellation validation
-- Robot return-to-base
-- Admin intervention (if washing)
-- Refund processing
-- SystemLogs
+```
+CUSTOMER APP                  DATABASE                ADMIN WEB               ROBOT SYSTEM
+     │                           │                         │                        │
+     ├─ Create Request ────────►│                         │                        │
+     │                           │◄─── Query Pending ──────┤                        │
+     │                           │                         │                        │
+     │                           │──── Assign Robot ──────►│                        │
+     │                           │                         │                        │
+     │                           │◄──── Update Status ─────┤                        │
+     │                           │                         │                        │
+     │                           │────── Nav Target ──────────────────────────────►│
+     │                           │                         │                        │
+     │◄─── Notification ─────────│                         │                        │
+     │                           │                         │                        │
+     │── Confirm Loaded ────────►│                         │                        │
+     │                           │                         │                        │
+     │                           │◄────── Sensor Data ──────────────────────────────┤
+     │                           │                         │                        │
+     │                           │─── Update Washing ─────►│                        │
+     │                           │                         │                        │
+     │                           │◄── Mark Done ───────────┤                        │
+     │                           │                         │                        │
+     │                           │──── Start Delivery ────────────────────────────►│
+     │                           │                         │                        │
+     │◄─── Delivery Alert ───────│                         │                        │
+     │                           │                         │                        │
+     │── Confirm Unload ────────►│                         │                        │
+     │                           │                         │                        │
+     │                           │────── Return Base ──────────────────────────────►│
+     │                           │                         │                        │
+     │◄─── Completed ────────────│                         │                        │
+     │                           │                         │                        │
+     │── View Receipt ──────────►│                         │                        │
+     │                           │                         │                        │
+     │                           │◄── Mark Paid ───────────┤                        │
+```
 
 ---
 
-### Phase 13: Offline Robot Detection (Lines 451-480, Background)
-**Robot disconnects** → Offline detector triggers → Robot marked offline → Request reassigned → Admin alerted
+## All System Components
 
-**Key Components:**
-- Background service (30s interval)
-- LastPing monitoring
-- Robot health checks
-- Request reassignment
-- Critical alerts
+### Customer Mobile App Features
+- JWT authentication
+- Request creation with duplicate prevention
+- Real-time request status tracking
+- Laundry loading confirmation (weight-based)
+- Laundry unloading confirmation
+- Payment receipt viewing
+- Admin messaging with image support
+- Push notifications
 
----
+### Admin Web Dashboard Features
+- ASP.NET Identity authentication with role-based access
+- Request management (approve/decline/cancel)
+- User CRUD operations with role assignment
+- Robot monitoring and control
+- Beacon configuration for room mapping
+- Accounting dashboard with revenue tracking
+- Payment processing (cash/GCash)
+- Financial reporting (CSV/PDF export)
+- Customer support messaging
+- System settings configuration
+- Emergency stop and maintenance mode
+- Live camera feed viewing
 
-## Database Tables Used
+### Robot System Features
+- Autonomous line following with PID control
+- BLE beacon navigation with RSSI-based targeting
+- Weight sensor for load detection (HX711 load cell)
+- Ultrasonic sensor for obstacle detection
+- Camera-based line detection
+- Continuous server communication (1-second polling)
+- Emergency stop response
+- Maintenance mode support
+- Auto-registration with server
+- Offline detection and recovery
 
-| Table | Operations | Data Stored |
-|-------|-----------|-------------|
-| **Users** | SELECT (auth), UPDATE (profile) | Credentials, roles, profile, beacon assignment |
-| **Requests** | INSERT, UPDATE (status changes) | Status, timestamps, costs, robot assignment |
-| **Robots** | SELECT (assignment), UPDATE (status) | Status, last ping, IP address, current task |
-| **Beacons** | SELECT (navigation) | MAC address, RSSI threshold, room mapping |
-| **Messages** | INSERT, SELECT, UPDATE (read status) | Chat content, images, timestamps, read flags |
-| **Payments** | INSERT, UPDATE (status) | Amount, method, status, timestamps |
-| **PaymentAdjustments** | INSERT | Revenue adjustments, expenses, types |
-| **SystemLogs** | INSERT (all events) | Event type, entity IDs, timestamps, descriptions |
+### Database Tables
+- **Users** - Authentication, profiles, roles, beacon assignments
+- **Requests** - Complete request lifecycle tracking
+- **Robots** - Robot state, availability, assignments
+- **Beacons** - BLE beacon configuration and room mapping
+- **Messages** - Customer-admin communication
+- **Payments** - Payment records and status
+- **PaymentAdjustments** - Revenue adjustments and expenses
+- **SystemLogs** - Complete audit trail of all events
 
----
-
-## API Endpoints Called
-
-| Endpoint | Method | Purpose | Caller |
-|----------|--------|---------|--------|
-| `/api/auth/login` | POST | Authentication | Mobile App |
-| `/api/requests/create` | POST | Create request | Mobile App |
-| `/api/requests/active` | GET | Check duplicates | Mobile App |
-| `/api/requests/{id}/confirm-loaded` | POST | Confirm laundry loaded | Mobile App |
-| `/api/requests/{id}/confirm-unloaded` | POST | Confirm unloaded | Mobile App |
-| `/api/requests/{id}/mark-washing-done` | POST | Mark washing complete | Web Admin |
-| `/api/robot/{name}/data-exchange` | POST | Bidirectional data | Robot (1s interval) |
-| `/api/payment/{id}/mark-paid` | POST | Record payment | Web Admin |
-| `/api/messages/send` | POST | Send message | Mobile/Web |
-| `/api/messages/conversation` | GET | Get chat history | Mobile/Web |
-
----
-
-## Background Services
-
-| Service | Interval | Trigger | Action |
-|---------|----------|---------|--------|
-| **Queue Processor** | Continuous | New request or robot available | Assigns robots to pending requests |
-| **Timeout Monitor** | 10 seconds | Active requests | Cancels requests exceeding time limits |
-| **Offline Detector** | 30 seconds | All robots | Marks offline robots, reassigns requests |
-| **Log Cleaner** | Daily | Scheduled | Archives old logs to file system |
-
----
-
-## Robot Hardware Components
-
-| Component | Model/Type | Data Reported |
-|-----------|-----------|---------------|
-| **Camera** | Raspberry Pi Camera | Line position (center offset) |
-| **Weight Sensor** | HX711 Load Cell | Weight in kg |
-| **Ultrasonic** | HC-SR04 | Distance in cm |
-| **Bluetooth** | Built-in BLE | Beacon RSSI values |
-| **Motor Driver** | L298N | N/A (receives commands) |
-| **Buzzer** | Piezo buzzer | N/A (receives commands) |
+### Background Services
+- **Queue Processor** - Auto-assigns robots to pending requests
+- **Timeout Monitor** - Auto-cancels requests exceeding time limits
+- **Offline Detector** - Detects disconnected robots, reassigns tasks
+- **Log Cleaner** - Archives old system logs
 
 ---
 
-## System Logging Events
+## Technology Stack
 
-All events logged to `SystemLogs` table:
-
-| Event | Entity | Data Logged |
-|-------|--------|-------------|
-| Login Attempt | User | Success/Failure, IP, Timestamp |
-| Request Created | Request | CustomerId, RequestId, Timestamp |
-| Request Accepted | Request | AdminId, RobotId, Timestamp |
-| Robot Arrived | Request | Location, RSSI, Timestamp |
-| Laundry Loaded | Request | Weight, Cost, Timestamp |
-| Washing Started | Request | RobotId, Timestamp |
-| Delivery Started | Request | RobotId, Timestamp |
-| Request Completed | Request | Duration, Cost, Timestamp |
-| Payment Completed | Payment | Method, Amount, Timestamp |
-| Message Sent | Message | SenderId, ReceiverId, Timestamp |
-| Request Cancelled | Request | Reason, InitiatorId, Timestamp |
-| Robot Offline | Robot | LastPing, Timestamp |
+| Component | Technology |
+|-----------|-----------|
+| Mobile App | React Native, Expo, TypeScript |
+| Web Backend | ASP.NET Core 8 MVC + Web API |
+| Database | MySQL 8.0 with Entity Framework Core |
+| Robot Controller | .NET 8 on Raspberry Pi 5 (ARM64) |
+| Authentication | JWT (mobile), ASP.NET Identity (web) |
+| Communication | RESTful HTTP/HTTPS APIs |
+| Robot Hardware | GPIO, Camera, HX711, HC-SR04, BLE |
 
 ---
 
 ## Color Legend
 
-- 🟢 **Soft Green** - Customer-facing actions and success states
-- 🟡 **Soft Amber** - Administrator actions
-- 🔵 **Muted Blue** - Robot operations
+- 🟢 **Soft Green** - Customer-facing components
+- 🟡 **Soft Amber** - Admin-facing components
+- 🔵 **Muted Blue** - Robot components
 - 🟣 **Soft Lavender** - Database operations
 - 🌿 **Muted Mint** - API endpoints
 - 🔴 **Soft Coral** - Errors and failures
@@ -685,19 +618,6 @@ All events logged to `SystemLogs` table:
 
 ---
 
-## Key Takeaways
-
-This comprehensive DFD demonstrates:
-
-✅ **Complete end-to-end flow** from login to payment
-✅ **All features integrated**: Authentication, robot control, payment, messaging, logging
-✅ **Real-time communication**: 1-second robot polling, push notifications
-✅ **Error handling**: Timeouts, cancellations, offline detection
-✅ **Financial tracking**: Payments, adjustments, revenue calculation, reporting
-✅ **Audit trail**: Complete system logging for all events
-✅ **Multi-actor system**: Customers, admins, robots all interconnected
-✅ **Background automation**: Queue processing, timeout monitoring, health checks
-
-**Document Version:** 1.0
+**Document Version:** 2.0
 **Created:** 2025
-**For:** Thesis Defense - Complete System Documentation
+**Purpose:** Thesis Defense - Complete Multi-Actor System Documentation
