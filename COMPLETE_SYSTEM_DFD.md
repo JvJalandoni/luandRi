@@ -163,7 +163,7 @@ flowchart TD
     TimeoutCancel --> CancelRequest
     CheckTimeout1 -->|No| WeightMonitor
 
-    CheckWeight -->|Yes| CheckMaxWeight{Weight <<br/>Max (50kg)?}
+    CheckWeight -->|Yes| CheckMaxWeight{Weight <<br/>Max 50kg?}
     CheckMaxWeight -->|No| OverweightAlert[❌ Overweight!<br/>Alert Customer]
     OverweightAlert --> WeightMonitor
 
